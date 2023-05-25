@@ -207,6 +207,14 @@ const (
 	LOG4
 )
 
+// 0xe0 range - monitor related ops
+const (
+	CJOURNAL1 OpCode = 0xe0 + iota
+	CJOURNAL4
+	VJOURNAL1
+	VJOURNAL4
+)
+
 // 0xf0 range - closures.
 const (
 	CREATE       OpCode = 0xf0

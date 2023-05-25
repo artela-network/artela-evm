@@ -111,3 +111,13 @@ func memoryRevert(stack *Stack) (uint64, bool) {
 func memoryLog(stack *Stack) (uint64, bool) {
 	return calcMemSize64(stack.Back(0), stack.Back(1))
 }
+
+func makeMemoryJournal(size uint64) func(stack *Stack) (uint64, bool) {
+	return func(stack *Stack) (uint64, bool) {
+		if size > 1 {
+			return calcMemSize64(stack.Back(2), stack.Back(3))
+		}
+
+		return 0, false
+	}
+}
