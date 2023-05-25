@@ -14,18 +14,37 @@ type State struct {
 // the mapping is address -> slot -> index -> changes
 type StateChanges map[common.Address]map[uint256.Int]map[string][]*State
 
+func NewStateChanges() StateChanges {
+	return make(map[common.Address]map[uint256.Int]map[string][]*State)
+}
+
 func (s StateChanges) Save(account common.Address, slot *uint256.Int, index string, newState *State) {
-	changes, ok := s[account][*slot][index]
+	accountChange, ok := s[account]
 	if !ok {
-		s[account][*slot][index] = make([]*State, 0, 1)
-		changes = s[account][*slot][index]
+		s[account] = make(map[uint256.Int]map[string][]*State)
+		accountChange = s[account]
 	}
-	changes = append(changes, newState)
+	slotChange, ok := accountChange[*slot]
+	if !ok {
+		accountChange[*slot] = make(map[string][]*State)
+		slotChange = accountChange[*slot]
+	}
+	stateChange, ok := slotChange[index]
+	if !ok {
+		slotChange[index] = make([]*State, 0, 1)
+		stateChange = slotChange[index]
+	}
+
+	slotChange[index] = append(stateChange, newState)
 }
 
 // Monitor monitors the state changes and traces the call stack changes during a tx execution
 type Monitor struct {
 	states StateChanges
+}
+
+func NewMonitor() *Monitor {
+	return &Monitor{states: NewStateChanges()}
 }
 
 func (m *Monitor) StateChanges() StateChanges {

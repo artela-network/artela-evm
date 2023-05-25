@@ -63,7 +63,7 @@ type EVMInterpreter struct {
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
 
-	stateChangeCache StateChanges // cache of the state changes
+	monitor *Monitor // cache of the state changes
 }
 
 // NewEVMInterpreter returns a new instance of the Interpreter.
@@ -104,8 +104,9 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	}
 
 	return &EVMInterpreter{
-		evm: evm,
-		cfg: cfg,
+		evm:     evm,
+		cfg:     cfg,
+		monitor: NewMonitor(),
 	}
 }
 

@@ -947,12 +947,12 @@ func makeFixedSizeJournal(size int64) executionFunc {
 			}
 		}
 
-		data := interpreter.evm.StateDB.GetState(scope.Contract.Address(), common.Hash(storageSlot.Bytes()))
+		data := interpreter.evm.StateDB.GetState(scope.Contract.Address(), storageSlot.Bytes32())
 		state := &State{
 			Account: scope.Contract.Caller(),
 			Value:   data[:],
 		}
-		interpreter.stateChangeCache.Save(scope.Contract.Address(), &stateVarSlot, string(indices), state)
+		interpreter.monitor.StateChanges().Save(scope.Contract.Address(), &stateVarSlot, string(indices), state)
 		return nil, nil
 	}
 }
@@ -988,7 +988,8 @@ func makeVarLenJournal(size int64) executionFunc {
 	unmask := func(rawData []byte, length uint64) []byte {
 		data := new(uint256.Int).SetBytes(rawData)
 		mask := new(uint256.Int).Add(storageMask, zero)
-		return data.And(data, mask.Not(mask)).Bytes()
+		ret := data.And(data, mask.Not(mask)).Bytes32()
+		return ret[:]
 	}
 
 	u64Ceiling := func(nom, denom uint64) uint64 {
@@ -1020,7 +1021,7 @@ func makeVarLenJournal(size int64) executionFunc {
 			}
 		}
 
-		hash := common.Hash(storageSlot.Bytes32())
+		hash := storageSlot.Bytes32()
 		contract := scope.Contract.Address()
 		rawState := interpreter.evm.StateDB.GetState(contract, hash)
 		length, err := extractStorageLen(rawState[:])
@@ -1045,7 +1046,7 @@ func makeVarLenJournal(size int64) executionFunc {
 			Account: scope.Contract.Caller(),
 			Value:   stateBytes,
 		}
-		interpreter.stateChangeCache.Save(scope.Contract.Address(), &stateVarSlot, string(indices), state)
+		interpreter.monitor.StateChanges().Save(scope.Contract.Address(), &stateVarSlot, string(indices), state)
 		return nil, nil
 	}
 }
