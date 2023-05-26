@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -930,4 +931,137 @@ func makeSwap(size int64) executionFunc {
 		scope.Stack.swap(int(size))
 		return nil, nil
 	}
+}
+
+func makeFixedSizeJournal(size int64) executionFunc {
+	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+		stack := scope.Stack
+		stateVarSlot := stack.pop()
+		storageSlot := &stateVarSlot
+		var indices []byte
+		if size > 1 {
+			var err error
+			storageSlot, indices, err = loadIndices(scope.Stack, scope.Memory)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		data := interpreter.evm.StateDB.GetState(scope.Contract.Address(), storageSlot.Bytes32())
+		state := &State{
+			Account: scope.Contract.Caller(),
+			Value:   data[:],
+		}
+		interpreter.monitor.StateChanges().Save(scope.Contract.Address(), &stateVarSlot, string(indices), state)
+		return nil, nil
+	}
+}
+
+func makeVarLenJournal(size int64) executionFunc {
+	extractStorageLen := func(rawData []byte) (uint64, error) {
+		dataLen := new(uint256.Int).SetBytes(rawData[:])
+
+		length := new(uint256.Int).Add(dataLen, zero)
+		length.Div(dataLen, two)
+		outOfPlaceEncoding := new(uint256.Int).Add(dataLen, zero)
+		outOfPlaceEncoding.And(dataLen, one)
+		if outOfPlaceEncoding.IsZero() {
+			length.And(length, uint256.NewInt(0x7f))
+		}
+
+		isLess := uint64(0)
+		if length.Lt(oneSlot) {
+			isLess = 1
+		}
+
+		if outOfPlaceEncoding.Eq(uint256.NewInt(isLess)) {
+			return 0, errors.New("storage encoding error")
+		}
+
+		if !length.IsUint64() {
+			return 0, errors.New("storage too large to load")
+		}
+
+		return length.Uint64(), nil
+	}
+
+	unmask := func(rawData []byte, length uint64) []byte {
+		data := new(uint256.Int).SetBytes(rawData)
+		mask := new(uint256.Int).Add(storageMask, zero)
+		ret := data.And(data, mask.Not(mask)).Bytes32()
+		return ret[:]
+	}
+
+	u64Ceiling := func(nom, denom uint64) uint64 {
+		return (nom + denom - 1) / denom
+	}
+
+	keccak := func(interpreter *EVMInterpreter, data []byte) []byte {
+		if interpreter.hasher == nil {
+			interpreter.hasher = sha3.NewLegacyKeccak256().(keccakState)
+		} else {
+			interpreter.hasher.Reset()
+		}
+		interpreter.hasher.Write(data)
+		interpreter.hasher.Read(interpreter.hasherBuf[:])
+
+		return interpreter.hasherBuf[:]
+	}
+
+	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+		stack := scope.Stack
+		stateVarSlot := stack.pop()
+		storageSlot := &stateVarSlot
+		var indices []byte
+		if size > 1 {
+			var err error
+			storageSlot, indices, err = loadIndices(scope.Stack, scope.Memory)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		hash := storageSlot.Bytes32()
+		contract := scope.Contract.Address()
+		rawState := interpreter.evm.StateDB.GetState(contract, hash)
+		length, err := extractStorageLen(rawState[:])
+		if err != nil {
+			return nil, err
+		}
+
+		var stateBytes []byte
+		if length < 32 {
+			stateBytes = unmask(rawState[:], length)
+		} else {
+			storageSlot = new(uint256.Int).SetBytes(keccak(interpreter, storageSlot.Bytes()))
+			stateBytes = make([]byte, 0, length)
+			for i := uint64(0); i < u64Ceiling(length, 32); i++ {
+				offset := storageSlot.Add(storageSlot, one).Bytes32()
+				currentRawState := interpreter.evm.StateDB.GetState(contract, offset)
+				stateBytes = append(stateBytes, currentRawState[:]...)
+			}
+		}
+
+		state := &State{
+			Account: scope.Contract.Caller(),
+			Value:   stateBytes,
+		}
+		interpreter.monitor.StateChanges().Save(scope.Contract.Address(), &stateVarSlot, string(indices), state)
+		return nil, nil
+	}
+}
+
+func loadIndices(stack *Stack, mem *Memory) (*uint256.Int, []byte, error) {
+	storageSlot := stack.pop()
+	indicesPtr := stack.pop()
+	indicesSize := stack.pop()
+
+	offset := int64(indicesPtr.Uint64())
+	if !indicesSize.IsUint64() {
+		return nil, nil, errors.New("index key too large")
+	}
+
+	indices := mem.GetCopy(offset, int64(indicesSize.Uint64()))
+
+	return &storageSlot, indices[32:], nil
 }

@@ -217,6 +217,13 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	return params.SloadGasEIP2200, nil // dirty update (2.2)
 }
 
+func makeGasJournal(n uint64) gasFunc {
+	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+		// TODO: 🐸implement gas rule later
+		return params.SloadGasEIP2200, nil
+	}
+}
+
 func makeGasLog(n uint64) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		requestedSize, overflow := stack.Back(1).Uint64WithOverflow()
