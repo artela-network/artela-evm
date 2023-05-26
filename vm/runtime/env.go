@@ -17,9 +17,8 @@
 package runtime
 
 import (
+	"github.com/artela-network/evm/core"
 	"github.com/artela-network/evm/vm"
-	"github.com/ethereum/go-ethereum/common"
-	"math/big"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {
@@ -28,13 +27,8 @@ func NewEnv(cfg *Config) *vm.EVM {
 		GasPrice: cfg.GasPrice,
 	}
 	blockContext := vm.BlockContext{
-		CanTransfer: func(db vm.StateDB, addr common.Address, amount *big.Int) bool {
-			return db.GetBalance(addr).Cmp(amount) >= 0
-		},
-		Transfer: func(db vm.StateDB, sender common.Address, recipient common.Address, amount *big.Int) {
-			db.SubBalance(sender, amount)
-			db.AddBalance(recipient, amount)
-		},
+		CanTransfer: core.CanTransfer,
+		Transfer:    core.Transfer,
 		GetHash:     cfg.GetHashFn,
 		Coinbase:    cfg.Coinbase,
 		BlockNumber: cfg.BlockNumber,
