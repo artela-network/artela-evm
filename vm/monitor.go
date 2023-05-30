@@ -21,21 +21,26 @@ func (s *State) Eq(other *State) bool {
 // StateChanges saves the changes of current state
 // the mapping is address -> slot -> index -> changes
 type StateChanges struct {
-	slotIndex map[uint256.Int]string
+	slotIndex map[common.Address]map[uint256.Int]string
 	changes   map[common.Address]map[string]map[string][]*State
 }
 
 func NewStateChanges() *StateChanges {
 	return &StateChanges{
-		slotIndex: make(map[uint256.Int]string),
+		slotIndex: make(map[common.Address]map[uint256.Int]string),
 		changes:   make(map[common.Address]map[string]map[string][]*State),
 	}
 }
 
 // Save saves a state change, if state already cached, skip the saving
 func (s *StateChanges) Save(account common.Address, stateVarName string, slot *uint256.Int, index string, newState *State) {
-	if _, ok := s.slotIndex[*slot]; !ok {
-		s.slotIndex[*slot] = stateVarName
+	accountSlotIndex, ok := s.slotIndex[account]
+	if !ok {
+		s.slotIndex[account] = make(map[uint256.Int]string)
+		accountSlotIndex = s.slotIndex[account]
+	}
+	if _, ok := accountSlotIndex[*slot]; !ok {
+		accountSlotIndex[*slot] = stateVarName
 	}
 
 	accountChange, ok := s.changes[account]
