@@ -114,10 +114,15 @@ func memoryLog(stack *Stack) (uint64, bool) {
 
 func makeMemoryJournal(size uint64) func(stack *Stack) (uint64, bool) {
 	return func(stack *Stack) (uint64, bool) {
-		if size > 1 {
+		if size > 3 {
 			return calcMemSize64(stack.Back(2), stack.Back(3))
 		}
 
-		return 0, false
+		memLen := stack.Back(2)
+		if u64Len, overflow := memLen.Uint64WithOverflow(); overflow {
+			return 0, true
+		} else {
+			return u64Len, false
+		}
 	}
 }

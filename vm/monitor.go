@@ -20,23 +20,33 @@ func (s *State) Eq(other *State) bool {
 
 // StateChanges saves the changes of current state
 // the mapping is address -> slot -> index -> changes
-type StateChanges map[common.Address]map[uint256.Int]map[string][]*State
+type StateChanges struct {
+	slotIndex map[uint256.Int]string
+	changes   map[common.Address]map[string]map[string][]*State
+}
 
-func NewStateChanges() StateChanges {
-	return make(map[common.Address]map[uint256.Int]map[string][]*State)
+func NewStateChanges() *StateChanges {
+	return &StateChanges{
+		slotIndex: make(map[uint256.Int]string),
+		changes:   make(map[common.Address]map[string]map[string][]*State),
+	}
 }
 
 // Save saves a state change, if state already cached, skip the saving
-func (s StateChanges) Save(account common.Address, slot *uint256.Int, index string, newState *State) {
-	accountChange, ok := s[account]
-	if !ok {
-		s[account] = make(map[uint256.Int]map[string][]*State, 1)
-		accountChange = s[account]
+func (s *StateChanges) Save(account common.Address, stateVarName string, slot *uint256.Int, index string, newState *State) {
+	if _, ok := s.slotIndex[*slot]; !ok {
+		s.slotIndex[*slot] = stateVarName
 	}
-	slotChange, ok := accountChange[*slot]
+
+	accountChange, ok := s.changes[account]
 	if !ok {
-		accountChange[*slot] = make(map[string][]*State, 1)
-		slotChange = accountChange[*slot]
+		s.changes[account] = make(map[string]map[string][]*State, 1)
+		accountChange = s.changes[account]
+	}
+	slotChange, ok := accountChange[stateVarName]
+	if !ok {
+		accountChange[stateVarName] = make(map[string][]*State, 1)
+		slotChange = accountChange[stateVarName]
 	}
 	stateChange, ok := slotChange[index]
 	if !ok {
@@ -60,13 +70,13 @@ func (s StateChanges) Save(account common.Address, slot *uint256.Int, index stri
 
 // Monitor monitors the state changes and traces the call stack changes during a tx execution
 type Monitor struct {
-	states StateChanges
+	states *StateChanges
 }
 
 func NewMonitor() *Monitor {
 	return &Monitor{states: NewStateChanges()}
 }
 
-func (m *Monitor) StateChanges() StateChanges {
+func (m *Monitor) StateChanges() *StateChanges {
 	return m.states
 }
