@@ -43,10 +43,9 @@ func TestNewCommands(t *testing.T) {
 		t.Error(err)
 	}
 
-	stateChanges := evm.interpreter.monitor.states
+	stateChanges := evm.Monitor().StateChanges()
 
-	stateChange1, ok := stateChanges.changes[address]["MyToken.dummy3"][""]
-	assert.True(t, ok, "state change not correct")
+	stateChange1 := stateChanges.Variable(address, "MyToken.dummy3", "")
 	assert.Equal(t, 2, len(stateChange1), "state change not right")
 
 	assert.True(t, new(uint256.Int).SetBytes(stateChange1[0].Value).Eq(uint256.NewInt(0)), "state 0 value not eq")
@@ -55,8 +54,7 @@ func TestNewCommands(t *testing.T) {
 	assert.True(t, bytes.Compare(stateChange1[0].Account.Bytes(), common.Address{}.Bytes()) == 0, "state 0 account not eq")
 	assert.True(t, bytes.Compare(stateChange1[1].Account.Bytes(), sender.Bytes()) == 0, "state 1 account not eq")
 
-	stateChange2, ok := stateChanges.changes[address]["DummyDummy.dummy"][""]
-	assert.True(t, ok, "state change not correct")
+	stateChange2 := stateChanges.Variable(address, "DummyDummy.dummy", "")
 	assert.Equal(t, 2, len(stateChange2), "state change not right")
 
 	assert.Equal(t, "", string(stateChange2[0].Value))

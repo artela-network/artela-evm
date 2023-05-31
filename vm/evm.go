@@ -121,6 +121,8 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
+	// state change & call stack monitor
+	monitor *Monitor
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
@@ -133,6 +135,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		Config:      config,
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil),
+		monitor:     NewMonitor(),
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm
@@ -159,6 +162,10 @@ func (evm *EVM) Cancelled() bool {
 // Interpreter returns the current interpreter
 func (evm *EVM) Interpreter() *EVMInterpreter {
 	return evm.interpreter
+}
+
+func (evm *EVM) Monitor() *Monitor {
+	return evm.monitor
 }
 
 // Call executes the contract associated with the addr with the given input as

@@ -106,7 +106,7 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	return &EVMInterpreter{
 		evm:     evm,
 		cfg:     cfg,
-		monitor: NewMonitor(),
+		monitor: evm.monitor,
 	}
 }
 
