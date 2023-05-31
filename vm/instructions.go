@@ -947,7 +947,10 @@ func makeFixedSizeJournal(size int64) executionFunc {
 			Value:   data[:],
 		}
 
-		interpreter.monitor.StateChanges().Save(scope.Contract.Address(), stateVarName, stateVarSlot, string(indices), state)
+		if err := interpreter.monitor.StateChanges().
+			Save(scope.Contract.Address(), stateVarName, stateVarSlot, string(indices), state); err != nil {
+			return nil, err
+		}
 		return nil, nil
 	}
 }
@@ -1034,7 +1037,10 @@ func makeVarLenJournal(size int64) executionFunc {
 			Value:   stateBytes[:length],
 		}
 
-		interpreter.monitor.StateChanges().Save(scope.Contract.Address(), stateVarName, stateVarSlot, string(indices), state)
+		if err := interpreter.monitor.StateChanges().
+			Save(scope.Contract.Address(), stateVarName, stateVarSlot, string(indices), state); err != nil {
+			return nil, err
+		}
 		return nil, nil
 	}
 }

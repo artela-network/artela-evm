@@ -2,6 +2,7 @@ package vm
 
 import (
 	"bytes"
+	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 )
@@ -33,7 +34,11 @@ func NewStateChanges() *StateChanges {
 }
 
 // Save saves a state change, if state already cached, skip the saving
-func (s *StateChanges) Save(account common.Address, stateVarName string, slot *uint256.Int, index string, newState *State) {
+func (s *StateChanges) Save(account common.Address, stateVarName string, slot *uint256.Int, index string, newState *State) error {
+	if slot == nil {
+		return errors.New("slot cannot be nil")
+	}
+
 	accountSlotIndex, ok := s.slotIndex[account]
 	if !ok {
 		s.slotIndex[account] = make(map[uint256.Int]string)
@@ -62,7 +67,7 @@ func (s *StateChanges) Save(account common.Address, stateVarName string, slot *u
 	// compare with last state change, skip if equal
 	count := len(stateChange)
 	if count > 0 && newState.Eq(stateChange[count-1]) {
-		return
+		return nil
 	}
 
 	// initial state, state change account should be empty
@@ -71,6 +76,30 @@ func (s *StateChanges) Save(account common.Address, stateVarName string, slot *u
 	}
 
 	slotChange[index] = append(stateChange, newState)
+	return nil
+}
+
+// Variable looks up state changes by variable name
+func (s *StateChanges) Variable(account common.Address, stateVarName string, index string) []*State {
+	states, ok := s.changes[account][stateVarName][index]
+	if !ok {
+		return nil
+	}
+
+	return states
+}
+
+// Slot looks up state changes by storage slot
+func (s *StateChanges) Slot(account common.Address, slot *uint256.Int, index string) []*State {
+	if slot == nil {
+		return nil
+	}
+	stateVar, ok := s.slotIndex[account][*slot]
+	if !ok {
+		return nil
+	}
+
+	return s.Variable(account, stateVar, index)
 }
 
 // Monitor monitors the state changes and traces the call stack changes during a tx execution
