@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"encoding/hex"
 	"errors"
 	"sync/atomic"
 
@@ -933,29 +934,30 @@ func makeSwap(size int64) executionFunc {
 	}
 }
 
-func makeFixedSizeJournal(size int64) executionFunc {
+func makeValueJournal(size int64) executionFunc {
 	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 		stack := scope.Stack
-		stateVarName, indices, stateVarSlot, storageSlot, err := parseJournalStack(size, stack, scope.Memory)
+		stateVarName, indices, stateVarSlot, storageSlot, valueOffset, valueLen, err :=
+			parseValueJournalStack(size, stack, scope.Memory)
 		if err != nil {
 			return nil, err
 		}
 
-		data := interpreter.evm.StateDB.GetState(scope.Contract.Address(), storageSlot.Bytes32())
+		data := interpreter.evm.StateDB.GetState(scope.Contract.Address(), stateVarSlot.Bytes32())
 		state := &State{
 			Account: scope.Contract.Caller(),
-			Value:   data[:],
+			Value:   data[valueOffset : valueOffset+valueLen],
 		}
 
 		if err := interpreter.monitor.StateChanges().
-			Save(scope.Contract.Address(), stateVarName, stateVarSlot, string(indices), state); err != nil {
+			Save(scope.Contract.Address(), stateVarName, storageSlot, hex.EncodeToString(indices), state); err != nil {
 			return nil, err
 		}
 		return nil, nil
 	}
 }
 
-func makeVarLenJournal(size int64) executionFunc {
+func makeReferenceJournal(size int64) executionFunc {
 	extractStorageLen := func(rawData []byte) (uint64, error) {
 		dataLen := new(uint256.Int).SetBytes(rawData[:])
 		length := new(uint256.Int).Add(dataLen, zero)
@@ -1007,12 +1009,12 @@ func makeVarLenJournal(size int64) executionFunc {
 
 	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 		stack := scope.Stack
-		stateVarName, indices, stateVarSlot, storageSlot, err := parseJournalStack(size, stack, scope.Memory)
+		stateVarName, indices, stateVarSlot, storageSlot, err := parseReferenceJournalStack(size, stack, scope.Memory)
 		if err != nil {
 			return nil, err
 		}
 
-		hash := storageSlot.Bytes32()
+		hash := stateVarSlot.Bytes32()
 		contract := scope.Contract.Address()
 		rawState := interpreter.evm.StateDB.GetState(contract, hash)
 		length, err := extractStorageLen(rawState[:])
@@ -1024,9 +1026,9 @@ func makeVarLenJournal(size int64) executionFunc {
 		if length < 32 {
 			stateBytes = unmask(rawState[:], length)
 		} else {
-			storageSlot = new(uint256.Int).SetBytes(keccak(interpreter, storageSlot.Bytes()))
+			stateVarSlot = new(uint256.Int).SetBytes(keccak(interpreter, stateVarSlot.Bytes()))
 			for i := uint64(0); i < u64Ceiling(length, 32); i++ {
-				offset := storageSlot.Add(storageSlot, one).Bytes32()
+				offset := stateVarSlot.Add(stateVarSlot, one).Bytes32()
 				currentRawState := interpreter.evm.StateDB.GetState(contract, offset)
 				stateBytes = append(stateBytes, currentRawState[:]...)
 			}
@@ -1038,7 +1040,7 @@ func makeVarLenJournal(size int64) executionFunc {
 		}
 
 		if err := interpreter.monitor.StateChanges().
-			Save(scope.Contract.Address(), stateVarName, stateVarSlot, string(indices), state); err != nil {
+			Save(scope.Contract.Address(), stateVarName, storageSlot, hex.EncodeToString(indices), state); err != nil {
 			return nil, err
 		}
 		return nil, nil
@@ -1067,7 +1069,7 @@ func loadDataFromMem(memPtr *uint256.Int, mem *Memory) ([]byte, uint64, error) {
 	return mem.GetCopy(offset+32, int64(dataLen.Uint64())), dataLen.Uint64(), nil
 }
 
-func parseJournalStack(stackSize int64, stack *Stack, mem *Memory) (string, []byte, *uint256.Int, *uint256.Int, error) {
+func parseReferenceJournalStack(stackSize int64, stack *Stack, mem *Memory) (string, []byte, *uint256.Int, *uint256.Int, error) {
 	stateVarSlot := stack.pop()
 	journalDataSize := stack.pop()
 	if !journalDataSize.IsUint64() {
@@ -1095,9 +1097,56 @@ func parseJournalStack(stackSize int64, stack *Stack, mem *Memory) (string, []by
 		remainDataSize -= indicesLen + 32
 	}
 
-	if remainDataSize != 0 {
-		return "", nil, nil, nil, errors.New("stack error, journal data size not correct")
-	}
+	//if remainDataSize != 0 {
+	//	return "", nil, nil, nil, errors.New("stack error, journal data size not correct")
+	//}
 
 	return string(stateVarName), indices, &stateVarSlot, storageSlot, nil
+}
+
+func parseValueJournalStack(stackSize int64, stack *Stack, mem *Memory) (
+	string, []byte, *uint256.Int, *uint256.Int, uint64, uint64, error) {
+	stateVarSlot := stack.pop()
+	journalDataSize := stack.pop()
+	if !journalDataSize.IsUint64() {
+		return "", nil, nil, nil, 0, 0, errors.New("journal data too large")
+	}
+	remainDataSize := journalDataSize.Uint64()
+
+	stateVarNamePtr := stack.pop()
+	stateVarName, stateVarNameLen, err := loadDataFromMem(&stateVarNamePtr, mem)
+	if err != nil {
+		return "", nil, nil, nil, 0, 0, err
+	}
+
+	valueOffset := stack.pop()
+	if !valueOffset.IsUint64() {
+		return "", nil, nil, nil, 0, 0, errors.New("invalid storage value offset")
+	}
+
+	valueTypeLen := stack.pop()
+	if !valueTypeLen.IsUint64() {
+		return "", nil, nil, nil, 0, 0, errors.New("invalid storage value length")
+	}
+
+	remainDataSize -= stateVarNameLen + 32
+	storageSlot := &stateVarSlot
+
+	var indices []byte
+	if stackSize > 5 {
+		var err error
+		var indicesLen uint64
+		storageSlot, indices, indicesLen, err = loadIndices(stack, mem)
+		if err != nil {
+			return "", nil, nil, nil, 0, 0, err
+		}
+
+		remainDataSize -= indicesLen + 32
+	}
+
+	//if remainDataSize != 0 {
+	//	return "", nil, nil, nil, 0, 0, errors.New("stack error, journal data size not correct")
+	//}
+
+	return string(stateVarName), indices, &stateVarSlot, storageSlot, valueOffset.Uint64(), valueTypeLen.Uint64(), nil
 }

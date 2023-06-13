@@ -209,10 +209,10 @@ const (
 
 // 0xe0 range - monitor related ops
 const (
-	CJOURNAL3 OpCode = 0xe0 + iota
-	CJOURNAL5
-	VJOURNAL3
+	RJOURNAL3 OpCode = 0xe0 + iota
+	RJOURNAL5
 	VJOURNAL5
+	VJOURNAL7
 )
 
 // 0xf0 range - closures.
