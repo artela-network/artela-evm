@@ -943,14 +943,14 @@ func makeValueJournal(size int64) executionFunc {
 			return nil, err
 		}
 
-		data := interpreter.evm.StateDB.GetState(scope.Contract.Address(), stateVarSlot.Bytes32())
+		data := interpreter.evm.StateDB.GetState(scope.Contract.Address(), storageSlot.Bytes32())
 		state := &State{
 			Account: scope.Contract.Caller(),
 			Value:   data[valueOffset : valueOffset+valueLen],
 		}
 
 		if err := interpreter.monitor.StateChanges().
-			Save(scope.Contract.Address(), stateVarName, storageSlot, hex.EncodeToString(indices), state); err != nil {
+			Save(scope.Contract.Address(), stateVarName, stateVarSlot, hex.EncodeToString(indices), state); err != nil {
 			return nil, err
 		}
 		return nil, nil
@@ -1014,7 +1014,7 @@ func makeReferenceJournal(size int64) executionFunc {
 			return nil, err
 		}
 
-		hash := stateVarSlot.Bytes32()
+		hash := storageSlot.Bytes32()
 		contract := scope.Contract.Address()
 		rawState := interpreter.evm.StateDB.GetState(contract, hash)
 		length, err := extractStorageLen(rawState[:])
@@ -1026,9 +1026,9 @@ func makeReferenceJournal(size int64) executionFunc {
 		if length < 32 {
 			stateBytes = unmask(rawState[:], length)
 		} else {
-			stateVarSlot = new(uint256.Int).SetBytes(keccak(interpreter, stateVarSlot.Bytes()))
+			storageSlot = new(uint256.Int).SetBytes(keccak(interpreter, storageSlot.Bytes()))
 			for i := uint64(0); i < u64Ceiling(length, 32); i++ {
-				offset := stateVarSlot.Add(stateVarSlot, one).Bytes32()
+				offset := storageSlot.Add(storageSlot, one).Bytes32()
 				currentRawState := interpreter.evm.StateDB.GetState(contract, offset)
 				stateBytes = append(stateBytes, currentRawState[:]...)
 			}
@@ -1040,7 +1040,7 @@ func makeReferenceJournal(size int64) executionFunc {
 		}
 
 		if err := interpreter.monitor.StateChanges().
-			Save(scope.Contract.Address(), stateVarName, storageSlot, hex.EncodeToString(indices), state); err != nil {
+			Save(scope.Contract.Address(), stateVarName, stateVarSlot, hex.EncodeToString(indices), state); err != nil {
 			return nil, err
 		}
 		return nil, nil
