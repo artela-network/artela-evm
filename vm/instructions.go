@@ -18,8 +18,10 @@ package vm
 
 import (
 	"errors"
+	artelaType "github.com/artela-network/artelasdk/types"
 	"sync/atomic"
 
+	djpm "github.com/artela-network/artelasdk/djpm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -695,8 +697,35 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 		gas += params.CallStipend
 		bigVal = value.ToBig()
 	}
+	// artela aspect PreTxExecute start
+	request := &artelaType.RequestEthMsgAspect{
+		BlockHeight: 0,
+		TxHash:      nil,
+		TxIndex:     0,
+		To:          &toAddr,
+		From:        scope.Contract.Address(),
+		Nonce:       0,
+		GasLimit:    gas,
+		GasPrice:    nil,
+		GasFeeCap:   nil,
+		GasTipCap:   nil,
+		Value:       bigVal,
+		TxType:      0,
+		TxData:      args,
+		AccessList:  nil,
+		ChainId:     "",
+	}
 
+	execute := djpm.AspectInstance().PreContractCall(request)
+	if execute.HasErr() {
+		return nil, execute.Err
+	}
 	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, bigVal)
+
+	responseAspect := djpm.AspectInstance().PostContractCall(request)
+	if responseAspect.HasErr() {
+		return nil, responseAspect.Err
+	}
 
 	if err != nil {
 		temp.Clear()
@@ -734,6 +763,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	}
 
 	ret, returnGas, err := interpreter.evm.CallCode(scope.Contract, toAddr, args, gas, bigVal)
+
 	if err != nil {
 		temp.Clear()
 	} else {
