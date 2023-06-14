@@ -943,10 +943,11 @@ func makeValueJournal(size int64) executionFunc {
 			return nil, err
 		}
 
+		start, end := 32-valueOffset-valueLen, 32-valueOffset
 		data := interpreter.evm.StateDB.GetState(scope.Contract.Address(), storageSlot.Bytes32())
 		state := &State{
 			Account: scope.Contract.Caller(),
-			Value:   data[valueOffset : valueOffset+valueLen],
+			Value:   data[start:end],
 		}
 
 		if err := interpreter.monitor.StateChanges().
