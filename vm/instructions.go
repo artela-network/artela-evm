@@ -700,21 +700,21 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	}
 	// artela aspect PreTxExecute start
 	request := &artelaType.RequestEthMsgAspect{
-		BlockHeight: 0,
+		BlockHeight: int64(interpreter.evm.Context.BlockNumber.Uint64()),
 		TxHash:      nil,
 		TxIndex:     0,
 		To:          &toAddr,
 		From:        scope.Contract.Address(),
 		Nonce:       0,
 		GasLimit:    gas,
-		GasPrice:    nil,
+		GasPrice:    interpreter.evm.TxContext.GasPrice,
 		GasFeeCap:   nil,
 		GasTipCap:   nil,
 		Value:       bigVal,
 		TxType:      0,
 		TxData:      args,
 		AccessList:  nil,
-		ChainId:     "",
+		ChainId:     interpreter.evm.chainRules.ChainID.String(),
 	}
 
 	execute := djpm.AspectInstance().PreContractCall(request)
