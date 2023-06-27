@@ -717,15 +717,21 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 		ChainId:     interpreter.evm.chainRules.ChainID.String(),
 	}
 
+	var ret []byte
+	var returnGas uint64
+	var err error
 	execute := djpm.AspectInstance().PreContractCall(request)
 	if execute.HasErr() {
-		return nil, execute.Err
-	}
-	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, bigVal)
+		err = execute.Err
+		returnGas = execute.GasInfo.GasUsed
+	} else {
+		ret, returnGas, err = interpreter.evm.Call(scope.Contract, toAddr, args, gas, bigVal)
 
-	responseAspect := djpm.AspectInstance().PostContractCall(request)
-	if responseAspect.HasErr() {
-		return nil, responseAspect.Err
+		responseAspect := djpm.AspectInstance().PostContractCall(request)
+		if responseAspect.HasErr() {
+			err = responseAspect.Err
+			returnGas = execute.GasInfo.GasUsed
+		}
 	}
 
 	if err != nil {
