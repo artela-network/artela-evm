@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"encoding/hex"
 	"errors"
 	artelaType "github.com/artela-network/artelasdk/types"
 	"sync/atomic"
@@ -699,32 +700,38 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	}
 	// artela aspect PreTxExecute start
 	request := &artelaType.RequestEthMsgAspect{
-		BlockHeight: 0,
+		BlockHeight: int64(interpreter.evm.Context.BlockNumber.Uint64()),
 		TxHash:      nil,
 		TxIndex:     0,
 		To:          &toAddr,
 		From:        scope.Contract.Address(),
 		Nonce:       0,
 		GasLimit:    gas,
-		GasPrice:    nil,
+		GasPrice:    interpreter.evm.TxContext.GasPrice,
 		GasFeeCap:   nil,
 		GasTipCap:   nil,
 		Value:       bigVal,
 		TxType:      0,
 		TxData:      args,
 		AccessList:  nil,
-		ChainId:     "",
+		ChainId:     interpreter.evm.chainRules.ChainID.String(),
 	}
 
+	var ret []byte
+	var returnGas uint64
+	var err error
 	execute := djpm.AspectInstance().PreContractCall(request)
 	if execute.HasErr() {
-		return nil, execute.Err
-	}
-	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, bigVal)
+		err = execute.Err
+		returnGas = execute.GasInfo.GasUsed
+	} else {
+		ret, returnGas, err = interpreter.evm.Call(scope.Contract, toAddr, args, gas, bigVal)
 
-	responseAspect := djpm.AspectInstance().PostContractCall(request)
-	if responseAspect.HasErr() {
-		return nil, responseAspect.Err
+		responseAspect := djpm.AspectInstance().PostContractCall(request)
+		if responseAspect.HasErr() {
+			err = responseAspect.Err
+			returnGas = execute.GasInfo.GasUsed
+		}
 	}
 
 	if err != nil {
@@ -963,29 +970,31 @@ func makeSwap(size int64) executionFunc {
 	}
 }
 
-func makeFixedSizeJournal(size int64) executionFunc {
+func makeValueJournal(size int64) executionFunc {
 	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 		stack := scope.Stack
-		stateVarName, indices, stateVarSlot, storageSlot, err := parseJournalStack(size, stack, scope.Memory)
+		stateVarName, indices, stateVarSlot, storageSlot, valueOffset, valueLen, err :=
+			parseValueJournalStack(size, stack, scope.Memory)
 		if err != nil {
 			return nil, err
 		}
 
+		start, end := 32-valueOffset-valueLen, 32-valueOffset
 		data := interpreter.evm.StateDB.GetState(scope.Contract.Address(), storageSlot.Bytes32())
 		state := &State{
 			Account: scope.Contract.Caller(),
-			Value:   data[:],
+			Value:   data[start:end],
 		}
 
 		if err := interpreter.monitor.StateChanges().
-			Save(scope.Contract.Address(), stateVarName, stateVarSlot, string(indices), state); err != nil {
+			Save(scope.Contract.Address(), stateVarName, stateVarSlot, hex.EncodeToString(indices), state); err != nil {
 			return nil, err
 		}
 		return nil, nil
 	}
 }
 
-func makeVarLenJournal(size int64) executionFunc {
+func makeReferenceJournal(size int64) executionFunc {
 	extractStorageLen := func(rawData []byte) (uint64, error) {
 		dataLen := new(uint256.Int).SetBytes(rawData[:])
 		length := new(uint256.Int).Add(dataLen, zero)
@@ -1037,7 +1046,7 @@ func makeVarLenJournal(size int64) executionFunc {
 
 	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 		stack := scope.Stack
-		stateVarName, indices, stateVarSlot, storageSlot, err := parseJournalStack(size, stack, scope.Memory)
+		stateVarName, indices, stateVarSlot, storageSlot, err := parseReferenceJournalStack(size, stack, scope.Memory)
 		if err != nil {
 			return nil, err
 		}
@@ -1068,7 +1077,7 @@ func makeVarLenJournal(size int64) executionFunc {
 		}
 
 		if err := interpreter.monitor.StateChanges().
-			Save(scope.Contract.Address(), stateVarName, stateVarSlot, string(indices), state); err != nil {
+			Save(scope.Contract.Address(), stateVarName, stateVarSlot, hex.EncodeToString(indices), state); err != nil {
 			return nil, err
 		}
 		return nil, nil
@@ -1097,7 +1106,7 @@ func loadDataFromMem(memPtr *uint256.Int, mem *Memory) ([]byte, uint64, error) {
 	return mem.GetCopy(offset+32, int64(dataLen.Uint64())), dataLen.Uint64(), nil
 }
 
-func parseJournalStack(stackSize int64, stack *Stack, mem *Memory) (string, []byte, *uint256.Int, *uint256.Int, error) {
+func parseReferenceJournalStack(stackSize int64, stack *Stack, mem *Memory) (string, []byte, *uint256.Int, *uint256.Int, error) {
 	stateVarSlot := stack.pop()
 	journalDataSize := stack.pop()
 	if !journalDataSize.IsUint64() {
@@ -1125,9 +1134,56 @@ func parseJournalStack(stackSize int64, stack *Stack, mem *Memory) (string, []by
 		remainDataSize -= indicesLen + 32
 	}
 
-	if remainDataSize != 0 {
-		return "", nil, nil, nil, errors.New("stack error, journal data size not correct")
-	}
+	//if remainDataSize != 0 {
+	//	return "", nil, nil, nil, errors.New("stack error, journal data size not correct")
+	//}
 
 	return string(stateVarName), indices, &stateVarSlot, storageSlot, nil
+}
+
+func parseValueJournalStack(stackSize int64, stack *Stack, mem *Memory) (
+	string, []byte, *uint256.Int, *uint256.Int, uint64, uint64, error) {
+	stateVarSlot := stack.pop()
+	journalDataSize := stack.pop()
+	if !journalDataSize.IsUint64() {
+		return "", nil, nil, nil, 0, 0, errors.New("journal data too large")
+	}
+	remainDataSize := journalDataSize.Uint64()
+
+	stateVarNamePtr := stack.pop()
+	stateVarName, stateVarNameLen, err := loadDataFromMem(&stateVarNamePtr, mem)
+	if err != nil {
+		return "", nil, nil, nil, 0, 0, err
+	}
+
+	valueOffset := stack.pop()
+	if !valueOffset.IsUint64() {
+		return "", nil, nil, nil, 0, 0, errors.New("invalid storage value offset")
+	}
+
+	valueTypeLen := stack.pop()
+	if !valueTypeLen.IsUint64() {
+		return "", nil, nil, nil, 0, 0, errors.New("invalid storage value length")
+	}
+
+	remainDataSize -= stateVarNameLen + 32
+	storageSlot := &stateVarSlot
+
+	var indices []byte
+	if stackSize > 5 {
+		var err error
+		var indicesLen uint64
+		storageSlot, indices, indicesLen, err = loadIndices(stack, mem)
+		if err != nil {
+			return "", nil, nil, nil, 0, 0, err
+		}
+
+		remainDataSize -= indicesLen + 32
+	}
+
+	//if remainDataSize != 0 {
+	//	return "", nil, nil, nil, 0, 0, errors.New("stack error, journal data size not correct")
+	//}
+
+	return string(stateVarName), indices, &stateVarSlot, storageSlot, valueOffset.Uint64(), valueTypeLen.Uint64(), nil
 }
