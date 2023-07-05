@@ -204,8 +204,8 @@ func (c *CallStacks) Push(new *InnerTransaction) {
 	c.count += 1
 }
 
-// Exit from an inner transaction, reset current to its parent
-func (c *CallStacks) Exit() {
+// Pop from an inner transaction, reset current to its parent
+func (c *CallStacks) Pop() {
 	if c.current == nil {
 		return
 	}
@@ -220,6 +220,20 @@ func (c *CallStacks) Head() *InnerTransaction {
 // Current returns the current inner transaction
 func (c *CallStacks) Current() *InnerTransaction {
 	return c.current
+}
+
+// ParentOf finds the parent inner tx of a given index
+func (c *CallStacks) ParentOf(index uint64) *InnerTransaction {
+	cursor := c.current
+	for cursor != nil && cursor.index != index {
+		cursor = cursor.parent
+	}
+
+	if cursor == nil {
+		return nil
+	}
+
+	return cursor.parent
 }
 
 // Monitor monitors the state changes and traces the call stack changes during a tx execution

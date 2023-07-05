@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"github.com/artela-network/artelasdk/djpm"
+	"github.com/artela-network/artelasdk/types"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -183,7 +185,39 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	})
 
 	// Reset call stack to its parent
-	defer callstacks.Exit()
+	defer callstacks.Pop()
+
+	// aspect PreTxExecute start
+	request := &types.RequestEthMsgAspect{
+		BlockHeight: int64(evm.Context.BlockNumber.Uint64()),
+		TxHash:      nil,
+		TxIndex:     0,
+		To:          &addr,
+		From:        caller.Address(),
+		Nonce:       evm.StateDB.GetNonce(caller.Address()),
+		GasLimit:    gas,
+		GasPrice:    evm.TxContext.GasPrice,
+		GasFeeCap:   nil,
+		GasTipCap:   nil,
+		Value:       value,
+		TxType:      0,
+		TxData:      input,
+		AccessList:  nil,
+		ChainId:     evm.chainRules.ChainID.String(),
+		CurrInnerTx: &types.InnerMessage{
+			To:    &addr,
+			From:  caller.Address(),
+			Data:  input,
+			Value: value,
+			Gas:   new(big.Int).SetUint64(gas),
+			Index: callstacks.Current().Index(),
+		},
+	}
+
+	aspectRes := djpm.AspectInstance().PreContractCall(request)
+	if aspectRes.HasErr() {
+		return nil, gas, aspectRes.Err
+	}
 
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
@@ -238,6 +272,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		//} else {
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
+
+	aspectRes = djpm.AspectInstance().PostContractCall(request)
+	if aspectRes.HasErr() {
+		return ret, gas, aspectRes.Err
+	}
+
 	return ret, gas, err
 }
 

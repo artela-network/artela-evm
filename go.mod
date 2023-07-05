@@ -114,4 +114,8 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace github.com/ethereum/go-ethereum => github.com/ethereum/go-ethereum v1.10.26
+replace (
+	github.com/artela-network/artelasdk => ../artelasdk
+	github.com/artela-network/runtime => ../runtime
+	github.com/ethereum/go-ethereum => github.com/ethereum/go-ethereum v1.10.26
+)
