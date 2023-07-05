@@ -2,19 +2,25 @@ package vm
 
 import (
 	"bytes"
-	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
+	"math/big"
+)
+
+const (
+	AccountBalanceMagic = ".balance"
 )
 
 type State struct {
-	Account common.Address // the account that triggered the state change
-	Value   []byte         // raw data of the updated state
+	Account      common.Address // the account that triggered the state change
+	InnerTxIndex uint64         // index of inner tx that is causing the state change
+	Value        []byte         // raw data of the updated state
 }
 
 // Eq compares two states, return true if two states are equal
 func (s *State) Eq(other *State) bool {
 	return other != nil &&
+		s.InnerTxIndex == other.InnerTxIndex &&
 		bytes.Compare(other.Account[:], s.Account[:]) == 0 &&
 		bytes.Compare(other.Value, s.Value) == 0
 }
@@ -33,19 +39,33 @@ func NewStateChanges() *StateChanges {
 	}
 }
 
-// Save saves a state change, if state already cached, skip the saving
-func (s *StateChanges) Save(account common.Address, stateVarName string, slot *uint256.Int, index string, newState *State) error {
-	if slot == nil {
-		return errors.New("slot cannot be nil")
-	}
+func (s *StateChanges) TransferWithRecord(db StateDB, from, to common.Address, amount *big.Int, innerTxIndex uint64, transfer TransferFunc) {
+	s.saveBalance(from, common.Address{}, uint256.MustFromBig(db.GetBalance(from)), innerTxIndex)
+	s.saveBalance(to, common.Address{}, uint256.MustFromBig(db.GetBalance(to)), innerTxIndex)
+	transfer(db, from, to, amount)
+	s.saveBalance(from, common.Address{}, uint256.MustFromBig(db.GetBalance(from)), innerTxIndex)
+	s.saveBalance(to, common.Address{}, uint256.MustFromBig(db.GetBalance(to)), innerTxIndex)
+}
 
-	accountSlotIndex, ok := s.slotIndex[account]
-	if !ok {
-		s.slotIndex[account] = make(map[uint256.Int]string)
-		accountSlotIndex = s.slotIndex[account]
-	}
-	if _, ok := accountSlotIndex[*slot]; !ok {
-		accountSlotIndex[*slot] = stateVarName
+func (s *StateChanges) saveBalance(account, caller common.Address, newBalance *uint256.Int, innerTxIndex uint64) {
+	s.SaveState(account, AccountBalanceMagic, nil, "", &State{
+		Account:      caller,
+		Value:        newBalance.Bytes(),
+		InnerTxIndex: innerTxIndex,
+	})
+}
+
+// SaveState saves a state change, if state already cached, skip the saving
+func (s *StateChanges) SaveState(account common.Address, stateVarName string, slot *uint256.Int, index string, newState *State) {
+	if slot != nil {
+		accountSlotIndex, ok := s.slotIndex[account]
+		if !ok {
+			s.slotIndex[account] = make(map[uint256.Int]string)
+			accountSlotIndex = s.slotIndex[account]
+		}
+		if _, ok := accountSlotIndex[*slot]; !ok {
+			accountSlotIndex[*slot] = stateVarName
+		}
 	}
 
 	accountChange, ok := s.changes[account]
@@ -67,7 +87,7 @@ func (s *StateChanges) Save(account common.Address, stateVarName string, slot *u
 	// compare with last state change, skip if equal
 	count := len(stateChange)
 	if count > 0 && newState.Eq(stateChange[count-1]) {
-		return nil
+		return
 	}
 
 	// initial state, state change account should be empty
@@ -76,7 +96,17 @@ func (s *StateChanges) Save(account common.Address, stateVarName string, slot *u
 	}
 
 	slotChange[index] = append(stateChange, newState)
-	return nil
+	return
+}
+
+// Balance looks up balance changes of an account
+func (s *StateChanges) Balance(account common.Address) []*State {
+	states, ok := s.changes[account][AccountBalanceMagic][""]
+	if !ok {
+		return nil
+	}
+
+	return states
 }
 
 // Variable looks up state changes by variable name
@@ -102,9 +132,91 @@ func (s *StateChanges) Slot(account common.Address, slot *uint256.Int, index str
 	return s.Variable(account, stateVar, index)
 }
 
+// IndicesOfChanges returns a collection of the change indices
+func (s *StateChanges) IndicesOfChanges(account common.Address, stateVarName string) []string {
+	accountChange, ok := s.changes[account]
+	if !ok {
+		return nil
+	}
+
+	stateVarChange, ok := accountChange[stateVarName]
+	if !ok {
+		return nil
+	}
+
+	indices := make([]string, 0, len(stateVarChange))
+	for index, _ := range stateVarChange {
+		indices = append(indices, index)
+	}
+
+	return indices
+}
+
+// InnerTransaction records the current contract call information
+type InnerTransaction struct {
+	From  common.Address
+	To    common.Address
+	Data  []byte
+	Value *uint256.Int
+	Gas   *uint256.Int
+
+	index  uint64
+	parent *InnerTransaction
+}
+
+// IsHead checks whether current inner transaction is the original transaction
+func (it *InnerTransaction) IsHead() bool {
+	return it.parent == nil
+}
+
+// Parent gets the parent of the inner transaction
+// if transaction is the original transaction, its parent will be nil
+func (it *InnerTransaction) Parent() *InnerTransaction {
+	return it.parent
+}
+
+// Index returns the current index of inner transaction
+func (it *InnerTransaction) Index() uint64 {
+	return it.index
+}
+
+type CallStacks struct {
+	head    *InnerTransaction
+	current *InnerTransaction
+	count   uint64
+}
+
+func (c *CallStacks) Push(new *InnerTransaction) {
+	if c.head == nil {
+		c.head = new
+	}
+
+	new.parent = c.current
+	new.index = c.count
+
+	c.current = new
+	c.count += 1
+}
+
+func (c *CallStacks) Exit() {
+	if c.current == nil {
+		return
+	}
+	c.current = c.current.parent
+}
+
+func (c *CallStacks) Head() *InnerTransaction {
+	return c.head
+}
+
+func (c *CallStacks) Current() *InnerTransaction {
+	return c.current
+}
+
 // Monitor monitors the state changes and traces the call stack changes during a tx execution
 type Monitor struct {
-	states *StateChanges
+	states     *StateChanges
+	callstacks *CallStacks
 }
 
 func NewMonitor() *Monitor {
@@ -113,4 +225,8 @@ func NewMonitor() *Monitor {
 
 func (m *Monitor) StateChanges() *StateChanges {
 	return m.states
+}
+
+func (m *Monitor) CallStacks() *CallStacks {
+	return m.callstacks
 }

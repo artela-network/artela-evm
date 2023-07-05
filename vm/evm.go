@@ -173,6 +173,18 @@ func (evm *EVM) Monitor() *Monitor {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	callstacks := evm.Monitor().CallStacks()
+	callstacks.Push(&InnerTransaction{
+		From:  caller.Address(),
+		To:    addr,
+		Data:  input,
+		Value: uint256.MustFromBig(value),
+		Gas:   uint256.NewInt(gas),
+	})
+
+	// Reset call stack to its parent
+	defer callstacks.Exit()
+
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -191,7 +203,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
+
+	// Transfer with balance monitor
+	evm.Monitor().StateChanges().
+		TransferWithRecord(evm.StateDB, caller.Address(), addr, value, callstacks.Current().index, evm.Context.Transfer)
 
 	if isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
