@@ -982,14 +982,13 @@ func makeValueJournal(size int64) executionFunc {
 		start, end := 32-valueOffset-valueLen, 32-valueOffset
 		data := interpreter.evm.StateDB.GetState(scope.Contract.Address(), storageSlot.Bytes32())
 		state := &State{
-			Account: scope.Contract.Caller(),
-			Value:   data[start:end],
+			Account:      scope.Contract.Caller(),
+			Value:        data[start:end],
+			InnerTxIndex: interpreter.monitor.CallStacks().Current().Index(),
 		}
 
-		if err := interpreter.monitor.StateChanges().
-			Save(scope.Contract.Address(), stateVarName, stateVarSlot, hex.EncodeToString(indices), state); err != nil {
-			return nil, err
-		}
+		interpreter.monitor.StateChanges().SaveState(scope.Contract.Address(),
+			stateVarName, stateVarSlot, hex.EncodeToString(indices), state)
 		return nil, nil
 	}
 }
@@ -1072,14 +1071,13 @@ func makeReferenceJournal(size int64) executionFunc {
 		}
 
 		state := &State{
-			Account: scope.Contract.Caller(),
-			Value:   stateBytes[:length],
+			Account:      scope.Contract.Caller(),
+			Value:        stateBytes[:length],
+			InnerTxIndex: interpreter.monitor.CallStacks().Current().Index(),
 		}
 
-		if err := interpreter.monitor.StateChanges().
-			Save(scope.Contract.Address(), stateVarName, stateVarSlot, hex.EncodeToString(indices), state); err != nil {
-			return nil, err
-		}
+		interpreter.monitor.StateChanges().SaveState(scope.Contract.Address(),
+			stateVarName, stateVarSlot, hex.EncodeToString(indices), state)
 		return nil, nil
 	}
 }
