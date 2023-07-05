@@ -149,7 +149,7 @@ func (s *StateChanges) IndicesOfChanges(account common.Address, stateVarName str
 	}
 
 	indices := make([]string, 0, len(stateVarChange))
-	for index, _ := range stateVarChange {
+	for index := range stateVarChange {
 		indices = append(indices, index)
 	}
 
@@ -228,7 +228,7 @@ type Monitor struct {
 	callstacks *CallStacks
 }
 
-// NewMonitor create a new instance of monitor
+// NewMonitor creates a new instance of monitor
 func NewMonitor() *Monitor {
 	return &Monitor{
 		states:     NewStateChanges(),
@@ -236,7 +236,7 @@ func NewMonitor() *Monitor {
 	}
 }
 
-// StateChanges returns the all current state changes
+// StateChanges returns all state changes
 func (m *Monitor) StateChanges() *StateChanges {
 	return m.states
 }
