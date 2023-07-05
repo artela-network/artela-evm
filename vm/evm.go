@@ -259,7 +259,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	// Transfer with balance monitor
 	evm.Monitor().StateChanges().
-		TransferWithRecord(evm.StateDB, caller.Address(), addr, value, callstacks.Current().index, evm.Context.Transfer)
+		TransferWithRecord(evm.StateDB, caller.Address(), addr, value, callstacks.Current(), evm.Context.Transfer)
 
 	if isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
@@ -436,6 +436,18 @@ func (c *codeAndHash) Hash() common.Hash {
 
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
+	callstacks := evm.Monitor().CallStacks()
+	callstacks.Push(&InnerTransaction{
+		From:  caller.Address(),
+		To:    address,
+		Data:  codeAndHash.code,
+		Value: uint256.MustFromBig(value),
+		Gas:   uint256.NewInt(gas),
+	})
+
+	// Reset call stack to its parent
+	defer callstacks.Pop()
+
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
@@ -468,7 +480,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Transfer with balance monitor
 	evm.Monitor().StateChanges().
 		TransferWithRecord(evm.StateDB, caller.Address(), address, value,
-			evm.Monitor().CallStacks().Current().Index(), evm.Context.Transfer)
+			evm.Monitor().CallStacks().Current(), evm.Context.Transfer)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.

@@ -42,7 +42,13 @@ func NewStateChanges() *StateChanges {
 }
 
 // TransferWithRecord is a wrapper for transfer func with balance change monitor
-func (s *StateChanges) TransferWithRecord(db StateDB, from, to common.Address, amount *big.Int, innerTxIndex uint64, transfer TransferFunc) {
+func (s *StateChanges) TransferWithRecord(db StateDB, from, to common.Address, amount *big.Int, innerTx *InnerTransaction, transfer TransferFunc) {
+	// When deploying a contract with EoA, innerTx could be nil
+	innerTxIndex := uint64(0)
+	if innerTx != nil {
+		innerTxIndex = innerTx.Index()
+	}
+
 	s.saveBalance(from, common.Address{}, uint256.MustFromBig(db.GetBalance(from)), innerTxIndex)
 	s.saveBalance(to, common.Address{}, uint256.MustFromBig(db.GetBalance(to)), innerTxIndex)
 	transfer(db, from, to, amount)
