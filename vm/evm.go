@@ -406,7 +406,10 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1)
 	}
-	evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
+	// Transfer with balance monitor
+	evm.Monitor().StateChanges().
+		TransferWithRecord(evm.StateDB, caller.Address(), address, value,
+			evm.Monitor().CallStacks().Current().Index(), evm.Context.Transfer)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
