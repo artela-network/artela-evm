@@ -8,6 +8,7 @@ import (
 )
 
 const (
+	// AccountBalanceMagic is the magic word we used to record the balance change of an account
 	AccountBalanceMagic = ".balance"
 )
 
@@ -32,6 +33,7 @@ type StateChanges struct {
 	changes   map[common.Address]map[string]map[string][]*State
 }
 
+// NewStateChanges create a new instance of state change cache
 func NewStateChanges() *StateChanges {
 	return &StateChanges{
 		slotIndex: make(map[common.Address]map[uint256.Int]string),
@@ -39,6 +41,7 @@ func NewStateChanges() *StateChanges {
 	}
 }
 
+// TransferWithRecord is a wrapper for transfer func with balance change monitor
 func (s *StateChanges) TransferWithRecord(db StateDB, from, to common.Address, amount *big.Int, innerTxIndex uint64, transfer TransferFunc) {
 	s.saveBalance(from, common.Address{}, uint256.MustFromBig(db.GetBalance(from)), innerTxIndex)
 	s.saveBalance(to, common.Address{}, uint256.MustFromBig(db.GetBalance(to)), innerTxIndex)
@@ -47,6 +50,7 @@ func (s *StateChanges) TransferWithRecord(db StateDB, from, to common.Address, a
 	s.saveBalance(to, common.Address{}, uint256.MustFromBig(db.GetBalance(to)), innerTxIndex)
 }
 
+// saveBalance saves the balance change of an account
 func (s *StateChanges) saveBalance(account, caller common.Address, newBalance *uint256.Int, innerTxIndex uint64) {
 	s.SaveState(account, AccountBalanceMagic, nil, "", &State{
 		Account:      caller,
@@ -180,12 +184,14 @@ func (it *InnerTransaction) Index() uint64 {
 	return it.index
 }
 
+// CallStacks record the current smart contract call stack
 type CallStacks struct {
-	head    *InnerTransaction
-	current *InnerTransaction
-	count   uint64
+	head    *InnerTransaction // head is the beginning of all inner transaction, same with original transaction
+	current *InnerTransaction // current inner transaction
+	count   uint64            // inner transaction count, used for inner tx index
 }
 
+// Push a new inner transaction to the current call stacks
 func (c *CallStacks) Push(new *InnerTransaction) {
 	if c.head == nil {
 		c.head = new
@@ -198,6 +204,7 @@ func (c *CallStacks) Push(new *InnerTransaction) {
 	c.count += 1
 }
 
+// Exit from an inner transaction, reset current to its parent
 func (c *CallStacks) Exit() {
 	if c.current == nil {
 		return
@@ -205,10 +212,12 @@ func (c *CallStacks) Exit() {
 	c.current = c.current.parent
 }
 
+// Head returns the original transaction
 func (c *CallStacks) Head() *InnerTransaction {
 	return c.head
 }
 
+// Current returns the current inner transaction
 func (c *CallStacks) Current() *InnerTransaction {
 	return c.current
 }
@@ -219,14 +228,20 @@ type Monitor struct {
 	callstacks *CallStacks
 }
 
+// NewMonitor create a new instance of monitor
 func NewMonitor() *Monitor {
-	return &Monitor{states: NewStateChanges()}
+	return &Monitor{
+		states:     NewStateChanges(),
+		callstacks: &CallStacks{},
+	}
 }
 
+// StateChanges returns the all current state changes
 func (m *Monitor) StateChanges() *StateChanges {
 	return m.states
 }
 
+// CallStacks returns the current call stacks
 func (m *Monitor) CallStacks() *CallStacks {
 	return m.callstacks
 }
