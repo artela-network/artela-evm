@@ -43,6 +43,22 @@ type (
 	GetHashFunc func(uint64) common.Hash
 )
 
+// Message represents a message sent to a contract.
+type Message interface {
+	From() common.Address
+	To() *common.Address
+
+	GasPrice() *big.Int
+	GasFeeCap() *big.Int
+	GasTipCap() *big.Int
+	Gas() uint64
+	Value() *big.Int
+
+	Nonce() uint64
+	IsFake() bool
+	Data() []byte
+}
+
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
@@ -86,6 +102,9 @@ type TxContext struct {
 	// Message information
 	Origin   common.Address // Provides information for ORIGIN
 	GasPrice *big.Int       // Provides information for GASPRICE
+
+	// Original message info
+	Msg Message
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -192,16 +211,16 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		BlockHeight: int64(evm.Context.BlockNumber.Uint64()),
 		TxHash:      nil,
 		TxIndex:     0,
-		To:          &addr,
-		From:        caller.Address(),
+		To:          evm.Msg.To(),
+		From:        evm.Origin,
 		Nonce:       evm.StateDB.GetNonce(caller.Address()),
-		GasLimit:    gas,
-		GasPrice:    evm.TxContext.GasPrice,
-		GasFeeCap:   nil,
-		GasTipCap:   nil,
-		Value:       value,
+		GasLimit:    evm.Msg.Gas(),
+		GasPrice:    evm.GasPrice,
+		GasFeeCap:   evm.Msg.GasFeeCap(),
+		GasTipCap:   evm.Msg.GasTipCap(),
+		Value:       evm.Msg.Value(),
 		TxType:      0,
-		TxData:      input,
+		TxData:      evm.Msg.Data(),
 		AccessList:  nil,
 		ChainId:     evm.chainRules.ChainID.String(),
 		CurrInnerTx: &types.InnerMessage{
