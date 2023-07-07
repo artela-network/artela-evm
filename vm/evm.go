@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"github.com/artela-network/artelasdk/djpm"
+	"github.com/artela-network/artelasdk/types"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -40,6 +42,22 @@ type (
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
 )
+
+// Message represents a message sent to a contract.
+type Message interface {
+	From() common.Address
+	To() *common.Address
+
+	GasPrice() *big.Int
+	GasFeeCap() *big.Int
+	GasTipCap() *big.Int
+	Gas() uint64
+	Value() *big.Int
+
+	Nonce() uint64
+	IsFake() bool
+	Data() []byte
+}
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
@@ -84,6 +102,9 @@ type TxContext struct {
 	// Message information
 	Origin   common.Address // Provides information for ORIGIN
 	GasPrice *big.Int       // Provides information for GASPRICE
+
+	// Original message info
+	Msg Message
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -183,7 +204,39 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	})
 
 	// Reset call stack to its parent
-	defer callstacks.Exit()
+	defer callstacks.Pop()
+
+	// aspect PreTxExecute start
+	request := &types.RequestEthMsgAspect{
+		BlockHeight: int64(evm.Context.BlockNumber.Uint64()),
+		TxHash:      nil,
+		TxIndex:     0,
+		To:          evm.Msg.To(),
+		From:        evm.Origin,
+		Nonce:       evm.StateDB.GetNonce(caller.Address()),
+		GasLimit:    evm.Msg.Gas(),
+		GasPrice:    evm.GasPrice,
+		GasFeeCap:   evm.Msg.GasFeeCap(),
+		GasTipCap:   evm.Msg.GasTipCap(),
+		Value:       evm.Msg.Value(),
+		TxType:      0,
+		TxData:      evm.Msg.Data(),
+		AccessList:  nil,
+		ChainId:     evm.chainRules.ChainID.String(),
+		CurrInnerTx: &types.InnerMessage{
+			To:    &addr,
+			From:  caller.Address(),
+			Data:  input,
+			Value: value,
+			Gas:   new(big.Int).SetUint64(gas),
+			Index: callstacks.Current().Index(),
+		},
+	}
+
+	aspectRes := djpm.AspectInstance().PreContractCall(request)
+	if aspectRes.HasErr() {
+		return nil, gas, aspectRes.Err
+	}
 
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
@@ -206,7 +259,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	// Transfer with balance monitor
 	evm.Monitor().StateChanges().
-		TransferWithRecord(evm.StateDB, caller.Address(), addr, value, callstacks.Current().index, evm.Context.Transfer)
+		TransferWithRecord(evm.StateDB, caller.Address(), addr, value, callstacks.Current(), evm.Context.Transfer)
 
 	if isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
@@ -238,6 +291,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		//} else {
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
+
+	aspectRes = djpm.AspectInstance().PostContractCall(request)
+	if aspectRes.HasErr() {
+		return ret, gas, aspectRes.Err
+	}
+
 	return ret, gas, err
 }
 
@@ -377,6 +436,18 @@ func (c *codeAndHash) Hash() common.Hash {
 
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
+	callstacks := evm.Monitor().CallStacks()
+	callstacks.Push(&InnerTransaction{
+		From:  caller.Address(),
+		To:    address,
+		Data:  codeAndHash.code,
+		Value: uint256.MustFromBig(value),
+		Gas:   uint256.NewInt(gas),
+	})
+
+	// Reset call stack to its parent
+	defer callstacks.Pop()
+
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
@@ -409,7 +480,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Transfer with balance monitor
 	evm.Monitor().StateChanges().
 		TransferWithRecord(evm.StateDB, caller.Address(), address, value,
-			evm.Monitor().CallStacks().Current().Index(), evm.Context.Transfer)
+			evm.Monitor().CallStacks().Current(), evm.Context.Transfer)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.

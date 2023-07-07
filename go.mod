@@ -18,7 +18,7 @@ require (
 	github.com/artela-network/runtime v0.3.0-alpha // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
-	github.com/bytecodealliance/wasmtime-go/v7 v7.0.0 // indirect
+	github.com/bytecodealliance/wasmtime-go/v9 v9.0.0 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cometbft/cometbft v0.37.1 // indirect
@@ -114,4 +114,6 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace github.com/ethereum/go-ethereum => github.com/ethereum/go-ethereum v1.10.26
+replace (
+	github.com/ethereum/go-ethereum => github.com/ethereum/go-ethereum v1.10.26
+)

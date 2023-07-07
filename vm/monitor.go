@@ -42,7 +42,13 @@ func NewStateChanges() *StateChanges {
 }
 
 // TransferWithRecord is a wrapper for transfer func with balance change monitor
-func (s *StateChanges) TransferWithRecord(db StateDB, from, to common.Address, amount *big.Int, innerTxIndex uint64, transfer TransferFunc) {
+func (s *StateChanges) TransferWithRecord(db StateDB, from, to common.Address, amount *big.Int, innerTx *InnerTransaction, transfer TransferFunc) {
+	// When deploying a contract with EoA, innerTx could be nil
+	innerTxIndex := uint64(0)
+	if innerTx != nil {
+		innerTxIndex = innerTx.Index()
+	}
+
 	s.saveBalance(from, common.Address{}, uint256.MustFromBig(db.GetBalance(from)), innerTxIndex)
 	s.saveBalance(to, common.Address{}, uint256.MustFromBig(db.GetBalance(to)), innerTxIndex)
 	transfer(db, from, to, amount)
@@ -204,8 +210,8 @@ func (c *CallStacks) Push(new *InnerTransaction) {
 	c.count += 1
 }
 
-// Exit from an inner transaction, reset current to its parent
-func (c *CallStacks) Exit() {
+// Pop from an inner transaction, reset current to its parent
+func (c *CallStacks) Pop() {
 	if c.current == nil {
 		return
 	}
@@ -220,6 +226,20 @@ func (c *CallStacks) Head() *InnerTransaction {
 // Current returns the current inner transaction
 func (c *CallStacks) Current() *InnerTransaction {
 	return c.current
+}
+
+// ParentOf finds the parent inner tx of a given index
+func (c *CallStacks) ParentOf(index uint64) *InnerTransaction {
+	cursor := c.current
+	for cursor != nil && cursor.index != index {
+		cursor = cursor.parent
+	}
+
+	if cursor == nil {
+		return nil
+	}
+
+	return cursor.parent
 }
 
 // Monitor monitors the state changes and traces the call stack changes during a tx execution
