@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"github.com/holiman/uint256"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -102,6 +103,12 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{16}): &bls12381Pairing{},
 	common.BytesToAddress([]byte{17}): &bls12381MapG1{},
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
+}
+
+// PrecompiledContractsAspect contains the default set of pre-compiled Ethereum
+// contracts used in Aspect.
+var PrecompiledContractsAspect = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{100}): &context{},
 }
 
 var (
@@ -1041,4 +1048,25 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 
 	// Encode the G2 point to 256 bytes
 	return g.EncodePoint(r), nil
+}
+
+// CONTEXT implemented runtime context query as a native contract.
+type context struct{}
+
+func (c *context) RequiredGas(input []byte) uint64 {
+	// TODO: refactor this later
+	return 5000
+}
+
+func (c *context) Run(input []byte) ([]byte, error) {
+	// trim the length header
+	length := new(uint256.Int).SetBytes(input[:32])
+	if !length.IsUint64() {
+		return nil, errors.New("key too long")
+	}
+
+	key := string(input[32:length.Uint64()])
+
+	// TODO: retrieve content from context with given key
+	return []byte(key), nil
 }
