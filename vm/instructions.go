@@ -708,6 +708,9 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	if err == nil || err == ErrExecutionReverted {
 		ret = common.CopyBytes(ret)
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+	} else if errors.As(err, &AspectError{}) {
+		ret = common.CopyBytes([]byte(err.Error()))
+		scope.Memory.Set(retOffset.Uint64(), uint64(len(ret)), ret)
 	}
 	scope.Contract.Gas += returnGas
 

@@ -42,6 +42,14 @@ var (
 	errStopToken = errors.New("stop token")
 )
 
+type AspectError struct {
+	error
+}
+
+func NewAspectError(msg string) *AspectError {
+	return &AspectError{errors.New(msg)}
+}
+
 // ErrStackUnderflow wraps an evm error when the items on the stack less
 // than the minimal requirement.
 type ErrStackUnderflow struct {

@@ -235,7 +235,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	aspectRes := djpm.AspectInstance().PreContractCall(request)
 	if aspectRes.HasErr() {
-		return nil, gas, aspectRes.Err
+		return nil, gas, NewAspectError(aspectRes.Err.Error())
 	}
 
 	// Fail if we're trying to execute above the call depth limit
@@ -294,7 +294,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	aspectRes = djpm.AspectInstance().PostContractCall(request)
 	if aspectRes.HasErr() {
-		return ret, gas, aspectRes.Err
+		return ret, gas, NewAspectError(aspectRes.Err.Error())
 	}
 
 	return ret, gas, err
