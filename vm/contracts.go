@@ -20,7 +20,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
-	"github.com/holiman/uint256"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -80,15 +79,16 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 // PrecompiledContractsBerlin contains the default set of pre-compiled Ethereum
 // contracts used in the Berlin release.
 var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}): &blake2F{},
+	common.BytesToAddress([]byte{1}):   &ecrecover{},
+	common.BytesToAddress([]byte{2}):   &sha256hash{},
+	common.BytesToAddress([]byte{3}):   &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):   &dataCopy{},
+	common.BytesToAddress([]byte{5}):   &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):   &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):   &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):   &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):   &blake2F{},
+	common.BytesToAddress([]byte{100}): &context{store: make(map[string]string)},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -103,12 +103,6 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{16}): &bls12381Pairing{},
 	common.BytesToAddress([]byte{17}): &bls12381MapG1{},
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
-}
-
-// PrecompiledContractsAspect contains the default set of pre-compiled Ethereum
-// contracts used in Aspect.
-var PrecompiledContractsAspect = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{100}): &context{},
 }
 
 var (
@@ -1051,7 +1045,9 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 }
 
 // CONTEXT implemented runtime context query as a native contract.
-type context struct{}
+type context struct {
+	store map[string]string // use this for now, switch to context later
+}
 
 func (c *context) RequiredGas(input []byte) uint64 {
 	// TODO: refactor this later
@@ -1059,14 +1055,12 @@ func (c *context) RequiredGas(input []byte) uint64 {
 }
 
 func (c *context) Run(input []byte) ([]byte, error) {
-	// trim the length header
-	length := new(uint256.Int).SetBytes(input[:32])
-	if !length.IsUint64() {
-		return nil, errors.New("key too long")
+	if input == nil || len(input) == 0 {
+		return nil, nil
 	}
 
-	key := string(input[32:length.Uint64()])
+	key := string(input)
 
 	// TODO: retrieve content from context with given key
-	return []byte(key), nil
+	return []byte(c.store[key]), nil
 }
