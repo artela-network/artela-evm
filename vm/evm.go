@@ -142,8 +142,8 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
-	// state change & call stack monitor
-	monitor *Monitor
+	// state change & call stack tracer
+	tracer *Tracer
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
@@ -156,7 +156,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		Config:      config,
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil),
-		monitor:     NewMonitor(),
+		tracer:      NewTracer(),
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm
@@ -185,8 +185,8 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 	return evm.interpreter
 }
 
-func (evm *EVM) Monitor() *Monitor {
-	return evm.monitor
+func (evm *EVM) Tracer() *Tracer {
+	return evm.tracer
 }
 
 // Call executes the contract associated with the addr with the given input as
@@ -194,17 +194,11 @@ func (evm *EVM) Monitor() *Monitor {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
-	callstacks := evm.Monitor().CallStacks()
-	callstacks.Push(&InnerTransaction{
-		From:  caller.Address(),
-		To:    addr,
-		Data:  input,
-		Value: uint256.MustFromBig(value),
-		Gas:   uint256.NewInt(gas),
-	})
+	tracer := evm.Tracer()
+	tracer.SaveCall(caller.Address(), addr, input, uint256.MustFromBig(value), uint256.NewInt(gas))
 
-	// Reset call stack to its parent
-	defer callstacks.Pop()
+	// exit from a call
+	defer tracer.ExitCall()
 
 	// aspect PreTxExecute start
 	request := &types.RequestEthMsgAspect{
@@ -229,7 +223,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			Data:  input,
 			Value: value,
 			Gas:   new(big.Int).SetUint64(gas),
-			Index: callstacks.Current().Index(),
+			Index: tracer.CallTree().Current().Index,
 		},
 	}
 
@@ -257,9 +251,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		evm.StateDB.CreateAccount(addr)
 	}
 
-	// Transfer with balance monitor
-	evm.Monitor().StateChanges().
-		TransferWithRecord(evm.StateDB, caller.Address(), addr, value, callstacks.Current(), evm.Context.Transfer)
+	// Transfer with balance tracer
+	evm.Tracer().TransferWithRecord(evm.StateDB, caller.Address(), addr, value, evm.Context.Transfer)
 
 	if isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
@@ -436,17 +429,11 @@ func (c *codeAndHash) Hash() common.Hash {
 
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
-	callstacks := evm.Monitor().CallStacks()
-	callstacks.Push(&InnerTransaction{
-		From:  caller.Address(),
-		To:    address,
-		Data:  codeAndHash.code,
-		Value: uint256.MustFromBig(value),
-		Gas:   uint256.NewInt(gas),
-	})
+	callstacks := evm.Tracer().CallTree()
+	callstacks.add(caller.Address(), address, codeAndHash.code, uint256.MustFromBig(value), uint256.NewInt(gas))
 
-	// Reset call stack to its parent
-	defer callstacks.Pop()
+	// Reset call stack to its Parent
+	defer callstacks.exit()
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
@@ -477,10 +464,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1)
 	}
-	// Transfer with balance monitor
-	evm.Monitor().StateChanges().
-		TransferWithRecord(evm.StateDB, caller.Address(), address, value,
-			evm.Monitor().CallStacks().Current(), evm.Context.Transfer)
+	// Transfer with balance tracer
+	evm.Tracer().TransferWithRecord(evm.StateDB, caller.Address(), address, value, evm.Context.Transfer)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.

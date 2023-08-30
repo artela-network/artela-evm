@@ -207,12 +207,16 @@ const (
 	LOG4
 )
 
-// 0xe0 range - monitor related ops
+// 0xe0 range - tracer related ops
 const (
-	RJOURNAL3 OpCode = 0xe0 + iota
-	RJOURNAL5
-	VJOURNAL5
-	VJOURNAL7
+	RSVJNAL OpCode = 0xe0 + iota
+	VSVJNAL
+	IRVVJNAL
+	IRVRJNAL
+	IVVVJNAL
+	IVVRJNAL
+	VVJNAL
+	VRJNAL
 )
 
 // 0xf0 range - closures.
