@@ -3,6 +3,7 @@ package vm
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 	"math/big"
@@ -44,16 +45,18 @@ type StorageKey struct {
 	childrenIndex map[string]*StorageKey
 	changes       *StorageChanges
 	data          []byte
+	typeId        common.Hash
 }
 
 // NewBranchKey creates a new instance of branch storage key,
 // branch storage key only stores the meta info of a storage slot,
 // it does not store the actual changed values of the given storage slot.
-func NewBranchKey(slot *uint256.Int, offset uint8, data []byte) *StorageKey {
+func NewBranchKey(slot *uint256.Int, offset uint8, typeId common.Hash, data []byte) *StorageKey {
 	return &StorageKey{
 		slot:          slot,
 		offset:        offset,
 		data:          data,
+		typeId:        typeId,
 		children:      make(map[uint256.Int]map[uint8]*StorageKey),
 		childrenIndex: make(map[string]*StorageKey),
 	}
@@ -115,7 +118,7 @@ type StateChanges struct {
 	// roots holds the storage change roots of accounts
 	roots map[common.Address]*StorageKey
 	// index holds an index table for searching storage key by slot and offset
-	index map[common.Address]map[uint256.Int]map[uint8]*StorageKey
+	index map[common.Address]map[uint256.Int]map[uint8]map[common.Hash]*StorageKey
 	// raw holds all raw state changes, the tracer will not decode it, developers can decode it by themselves
 	raw map[common.Address]map[uint256.Int]map[uint64]common.Hash
 }
@@ -124,7 +127,7 @@ type StateChanges struct {
 func NewStateChanges() *StateChanges {
 	return &StateChanges{
 		roots: make(map[common.Address]*StorageKey),
-		index: make(map[common.Address]map[uint256.Int]map[uint8]*StorageKey),
+		index: make(map[common.Address]map[uint256.Int]map[uint8]map[common.Hash]*StorageKey),
 		raw:   make(map[common.Address]map[uint256.Int]map[uint64]common.Hash),
 	}
 }
@@ -151,7 +154,20 @@ func (s *StateChanges) saveRawStateChange(account common.Address, slot uint256.I
 }
 
 // saveKey saves a storage key to the state change tree
-func (s *StateChanges) saveKey(account common.Address, parent, self, offset *uint256.Int, index []byte) (err error) {
+func (s *StateChanges) saveKey(account common.Address, parent, self, offset *uint256.Int, typeId, parentTypeId common.Hash, index []byte) (err error) {
+	fmt.Println("====================================")
+	fmt.Printf("Saving storage key for account %s\n", account.Hex())
+	if parent != nil {
+		fmt.Printf("Parent: %s\n", parent.Hex())
+	}
+	fmt.Printf("Key Slot: %s\n", self.Hex())
+	if offset != nil {
+		fmt.Printf("Offset: %s\n", offset.Hex())
+	}
+	fmt.Printf("Type Id: %s\n", typeId.Hex())
+	fmt.Printf("Parent Type Id: %s\n", parentTypeId.Hex())
+	fmt.Printf("Index: %s\n", string(index))
+
 	offsetU8 := uint8(0)
 	if offset != nil {
 		offsetU64, overflow := offset.Uint64WithOverflow()
@@ -163,19 +179,21 @@ func (s *StateChanges) saveKey(account common.Address, parent, self, offset *uin
 
 	var child *StorageKey
 	if parent == nil {
+		fmt.Println("Saving root key")
 		// dealing with top level state var
 		if s.roots[account] == nil {
 			s.roots[account] = NewRootKey()
 		}
-		child, err = s.roots[account].AddChild(NewBranchKey(self, offsetU8, index))
+		child, err = s.roots[account].AddChild(NewBranchKey(self, offsetU8, typeId, index))
 	} else {
+		fmt.Println("Saving child key")
 		// dealing with nested state var
-		parentKey := s.findKey(account, parent, 0)
+		parentKey := s.findKey(account, parent, 0, parentTypeId)
 		if parentKey == nil {
-			return errors.New("unknown Parent storage key node")
+			return errors.New("parent key not found")
 		}
 
-		child, err = parentKey.AddChild(NewBranchKey(self, offsetU8, index))
+		child, err = parentKey.AddChild(NewBranchKey(self, offsetU8, typeId, index))
 	}
 
 	if err != nil {
@@ -183,11 +201,12 @@ func (s *StateChanges) saveKey(account common.Address, parent, self, offset *uin
 	}
 
 	s.addKey(account, child.Slot(), child.Offset(), child)
+	fmt.Println("====================================")
 	return
 }
 
 // saveChange saves a storage change to the state change tree
-func (s *StateChanges) saveChange(account common.Address, self, offset *uint256.Int, callIdx uint64, newVal []byte) (err error) {
+func (s *StateChanges) saveChange(account common.Address, self, offset *uint256.Int, typeId common.Hash, callIdx uint64, newVal []byte) (err error) {
 	offsetU8 := uint8(0)
 	if offset != nil {
 		offsetU64, overflow := offset.Uint64WithOverflow()
@@ -201,7 +220,7 @@ func (s *StateChanges) saveChange(account common.Address, self, offset *uint256.
 		return errors.New("unknown account")
 	}
 
-	selfNode := s.findKey(account, self, offsetU8)
+	selfNode := s.findKey(account, self, offsetU8, typeId)
 	if selfNode == nil {
 		return errors.New("storage key node not found")
 	}
@@ -213,25 +232,33 @@ func (s *StateChanges) saveChange(account common.Address, self, offset *uint256.
 // addKey adds a storage key to the index table
 func (s *StateChanges) addKey(account common.Address, slot *uint256.Int, offset uint8, key *StorageKey) {
 	if _, ok := s.index[account]; !ok {
-		s.index[account] = make(map[uint256.Int]map[uint8]*StorageKey)
+		s.index[account] = make(map[uint256.Int]map[uint8]map[common.Hash]*StorageKey)
 	}
 	if _, ok := s.index[account][*slot]; !ok {
-		s.index[account][*slot] = make(map[uint8]*StorageKey)
+		s.index[account][*slot] = make(map[uint8]map[common.Hash]*StorageKey)
 	}
-	if s.index[account][*slot][offset] == nil {
-		s.index[account][*slot][offset] = key
+	if _, ok := s.index[account][*slot][offset]; !ok {
+		s.index[account][*slot][offset] = make(map[common.Hash]*StorageKey, 1)
+	}
+
+	if _, ok := s.index[account][*slot][offset][key.typeId]; !ok {
+		s.index[account][*slot][offset][key.typeId] = key
 	}
 }
 
 // findKey finds a storage key from the index table
-func (s *StateChanges) findKey(account common.Address, slot *uint256.Int, offset uint8) *StorageKey {
+func (s *StateChanges) findKey(account common.Address, slot *uint256.Int, offset uint8, typeId common.Hash) *StorageKey {
 	if _, ok := s.index[account]; !ok {
 		return nil
 	}
 	if _, ok := s.index[account][*slot]; !ok {
 		return nil
 	}
-	return s.index[account][*slot][offset]
+	if _, ok := s.index[account][*slot][offset]; !ok {
+		return nil
+	}
+
+	return s.index[account][*slot][offset][typeId]
 }
 
 // Balance looks up balance changes of an account
@@ -276,7 +303,7 @@ func (s *StateChanges) Variable(account common.Address, stateVarName string, ind
 }
 
 // Slot looks up state changes by storage slot
-func (s *StateChanges) Slot(account common.Address, slot, offset *uint256.Int) (*StorageChanges, error) {
+func (s *StateChanges) Slot(account common.Address, slot, offset *uint256.Int, typeId common.Hash) (*StorageChanges, error) {
 	if slot == nil {
 		return nil, errors.New("slot empty")
 	}
@@ -290,11 +317,12 @@ func (s *StateChanges) Slot(account common.Address, slot, offset *uint256.Int) (
 		offsetU8 = uint8(offsetU64)
 	}
 
-	storageKey := s.index[account][*slot][offsetU8]
-	if storageKey == nil {
+	key := s.findKey(account, slot, offsetU8, typeId)
+	if key == nil {
 		return nil, nil
 	}
-	return storageKey.changes, nil
+
+	return key.changes, nil
 }
 
 // IndicesOfChanges returns a collection of the change indices
@@ -435,13 +463,13 @@ func (t *Tracer) SaveRawStateChange(account common.Address, slot uint256.Int, va
 }
 
 // SaveStateChange saves a state change of a given slot at given offset
-func (t *Tracer) SaveStateChange(account common.Address, slot, offset *uint256.Int, newVal []byte) error {
-	return t.states.saveChange(account, slot, offset, t.CurrentCallIndex(), newVal)
+func (t *Tracer) SaveStateChange(account common.Address, slot, offset *uint256.Int, typeId common.Hash, newVal []byte) error {
+	return t.states.saveChange(account, slot, offset, typeId, t.CurrentCallIndex(), newVal)
 }
 
 // SaveStateKey saves the relation between state variable to a storage slot
-func (t *Tracer) SaveStateKey(account common.Address, parent, self, offset *uint256.Int, index []byte) error {
-	return t.states.saveKey(account, parent, self, offset, index)
+func (t *Tracer) SaveStateKey(account common.Address, parent, self, offset *uint256.Int, typeId, parentTypeId common.Hash, index []byte) error {
+	return t.states.saveKey(account, parent, self, offset, typeId, parentTypeId, index)
 }
 
 // SaveCall saves a call to call tree

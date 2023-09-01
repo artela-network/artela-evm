@@ -964,7 +964,7 @@ func opReferenceChangeJournal(pc *uint64, interpreter *EVMInterpreter, scope *Sc
 	unmask := func(rawData []byte, length uint64) []byte {
 		data := new(uint256.Int).SetBytes(rawData)
 		mask := new(uint256.Int).Add(storageMask, zero)
-		ret := data.And(data, mask.Not(mask)).Bytes32()
+		ret := data.And(data, mask.Not(mask)).Bytes()
 		return ret[:]
 	}
 
@@ -985,6 +985,7 @@ func opReferenceChangeJournal(pc *uint64, interpreter *EVMInterpreter, scope *Sc
 	}
 
 	storageSlot := scope.Stack.pop()
+	typeId := scope.Stack.pop()
 	statedb := interpreter.evm.StateDB
 	contract := scope.Contract.Address()
 	rawState := statedb.GetState(contract, storageSlot.Bytes32()).Bytes()
@@ -996,6 +997,7 @@ func opReferenceChangeJournal(pc *uint64, interpreter *EVMInterpreter, scope *Sc
 	var stateBytes []byte
 	if length < 32 {
 		stateBytes = unmask(rawState[:], length)
+		stateBytes = stateBytes[:length]
 	} else {
 		referenceSlot := new(uint256.Int).SetBytes(keccak(interpreter, storageSlot.Bytes()))
 		for i := uint64(0); i < u64Ceiling(length, 32); i++ {
@@ -1005,7 +1007,7 @@ func opReferenceChangeJournal(pc *uint64, interpreter *EVMInterpreter, scope *Sc
 		}
 	}
 
-	err = interpreter.tracer.SaveStateChange(contract, &storageSlot, nil, stateBytes)
+	err = interpreter.tracer.SaveStateChange(contract, &storageSlot, nil, typeId.Bytes32(), stateBytes)
 	return nil, err
 }
 
@@ -1014,6 +1016,7 @@ func opValueChangeJournal(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 	storageSlot := scope.Stack.pop()
 	offset := scope.Stack.pop()
 	typeSize := scope.Stack.pop()
+	typeId := scope.Stack.pop()
 
 	offsetU64, overflow := offset.Uint64WithOverflow()
 	if overflow || offsetU64 > 31 {
@@ -1021,14 +1024,14 @@ func opValueChangeJournal(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 	}
 
 	typeSizeU64, overflow := typeSize.Uint64WithOverflow()
-	if overflow || typeSizeU64 > 31 {
+	if overflow || typeSizeU64 > 32 {
 		return nil, errors.New("type size out of range")
 	}
 
 	contract := scope.Contract.Address()
 	newVal := interpreter.evm.StateDB.GetState(contract, storageSlot.Bytes32())
 	start, end := 32-offsetU64-typeSizeU64, 32-offsetU64
-	err := interpreter.tracer.SaveStateChange(contract, &storageSlot, nil, newVal[start:end])
+	err := interpreter.tracer.SaveStateChange(contract, &storageSlot, &offset, typeId.Bytes32(), newVal[start:end])
 	return nil, err
 }
 
@@ -1038,13 +1041,15 @@ func opReferenceIndexValueStorageJournal(pc *uint64, interpreter *EVMInterpreter
 	storageSlot := scope.Stack.pop()
 	keyPtr := scope.Stack.pop()
 	offset := scope.Stack.pop()
+	typeId := scope.Stack.pop()
+	parentTypeId := scope.Stack.pop()
 
 	storageIndex, _, err := loadDataFromMem(&keyPtr, scope.Memory)
 	if err != nil {
 		return nil, err
 	}
 
-	err = interpreter.tracer.SaveStateKey(scope.Contract.Address(), &base, &storageSlot, &offset, storageIndex)
+	err = interpreter.tracer.SaveStateKey(scope.Contract.Address(), &base, &storageSlot, &offset, typeId.Bytes32(), parentTypeId.Bytes32(), storageIndex)
 	return nil, err
 }
 
@@ -1054,8 +1059,10 @@ func opValueIndexValueStorageJournal(pc *uint64, interpreter *EVMInterpreter, sc
 	storageSlot := scope.Stack.pop()
 	keyValue := scope.Stack.pop()
 	offset := scope.Stack.pop()
+	typeId := scope.Stack.pop()
+	parentTypeId := scope.Stack.pop()
 
-	err := interpreter.tracer.SaveStateKey(scope.Contract.Address(), &base, &storageSlot, &offset, keyValue.Bytes())
+	err := interpreter.tracer.SaveStateKey(scope.Contract.Address(), &base, &storageSlot, &offset, typeId.Bytes32(), parentTypeId.Bytes32(), keyValue.Bytes())
 	return nil, err
 }
 
@@ -1064,13 +1071,15 @@ func opReferenceIndexReferenceStorageJournal(pc *uint64, interpreter *EVMInterpr
 	base := scope.Stack.pop()
 	storageSlot := scope.Stack.pop()
 	keyPtr := scope.Stack.pop()
+	typeId := scope.Stack.pop()
+	parentTypeId := scope.Stack.pop()
 
 	storageIndex, _, err := loadDataFromMem(&keyPtr, scope.Memory)
 	if err != nil {
 		return nil, err
 	}
 
-	err = interpreter.tracer.SaveStateKey(scope.Contract.Address(), &base, &storageSlot, nil, storageIndex)
+	err = interpreter.tracer.SaveStateKey(scope.Contract.Address(), &base, &storageSlot, nil, typeId.Bytes32(), parentTypeId.Bytes32(), storageIndex)
 	return nil, err
 }
 
@@ -1079,8 +1088,10 @@ func opValueIndexReferenceStorageJournal(pc *uint64, interpreter *EVMInterpreter
 	base := scope.Stack.pop()
 	storageSlot := scope.Stack.pop()
 	keyValue := scope.Stack.pop()
+	typeId := scope.Stack.pop()
+	parentTypeId := scope.Stack.pop()
 
-	err := interpreter.tracer.SaveStateKey(scope.Contract.Address(), &base, &storageSlot, nil, keyValue.Bytes())
+	err := interpreter.tracer.SaveStateKey(scope.Contract.Address(), &base, &storageSlot, nil, typeId.Bytes32(), parentTypeId.Bytes32(), keyValue.Bytes())
 	return nil, err
 }
 
@@ -1088,13 +1099,14 @@ func opValueIndexReferenceStorageJournal(pc *uint64, interpreter *EVMInterpreter
 func opReferenceStateVarJournal(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	stateVarNamePtr := scope.Stack.pop()
 	storageSlot := scope.Stack.pop()
+	typeId := scope.Stack.pop()
 
 	stateVarName, _, err := loadDataFromMem(&stateVarNamePtr, scope.Memory)
 	if err != nil {
 		return nil, err
 	}
 
-	err = interpreter.tracer.SaveStateKey(scope.Contract.Address(), nil, &storageSlot, nil, stateVarName)
+	err = interpreter.tracer.SaveStateKey(scope.Contract.Address(), nil, &storageSlot, nil, typeId.Bytes32(), common.Hash{}, stateVarName)
 	return nil, err
 }
 
@@ -1103,13 +1115,14 @@ func opValueStateVarJournal(pc *uint64, interpreter *EVMInterpreter, scope *Scop
 	stateVarNamePtr := scope.Stack.pop()
 	storageSlot := scope.Stack.pop()
 	offset := scope.Stack.pop()
+	typeId := scope.Stack.pop()
 
 	stateVarName, _, err := loadDataFromMem(&stateVarNamePtr, scope.Memory)
 	if err != nil {
 		return nil, err
 	}
 
-	err = interpreter.tracer.SaveStateKey(scope.Contract.Address(), nil, &storageSlot, &offset, stateVarName)
+	err = interpreter.tracer.SaveStateKey(scope.Contract.Address(), nil, &storageSlot, &offset, typeId.Bytes32(), common.Hash{}, stateVarName)
 	return nil, err
 }
 

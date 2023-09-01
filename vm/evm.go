@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"github.com/artela-network/artelasdk/djpm"
-	"github.com/artela-network/artelasdk/types"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -201,36 +199,36 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	defer tracer.ExitCall()
 
 	// aspect PreTxExecute start
-	request := &types.RequestEthMsgAspect{
-		BlockHeight: int64(evm.Context.BlockNumber.Uint64()),
-		TxHash:      nil,
-		TxIndex:     0,
-		To:          evm.Msg.To(),
-		From:        evm.Origin,
-		Nonce:       evm.StateDB.GetNonce(caller.Address()),
-		GasLimit:    evm.Msg.Gas(),
-		GasPrice:    evm.GasPrice,
-		GasFeeCap:   evm.Msg.GasFeeCap(),
-		GasTipCap:   evm.Msg.GasTipCap(),
-		Value:       evm.Msg.Value(),
-		TxType:      0,
-		TxData:      evm.Msg.Data(),
-		AccessList:  nil,
-		ChainId:     evm.chainRules.ChainID.String(),
-		CurrInnerTx: &types.InnerMessage{
-			To:    &addr,
-			From:  caller.Address(),
-			Data:  input,
-			Value: value,
-			Gas:   new(big.Int).SetUint64(gas),
-			Index: tracer.CallTree().Current().Index,
-		},
-	}
+	//request := &types.RequestEthMsgAspect{
+	//	BlockHeight: int64(evm.Context.BlockNumber.Uint64()),
+	//	TxHash:      nil,
+	//	TxIndex:     0,
+	//	To:          evm.Msg.To(),
+	//	From:        evm.Origin,
+	//	Nonce:       evm.StateDB.GetNonce(caller.Address()),
+	//	GasLimit:    evm.Msg.Gas(),
+	//	GasPrice:    evm.GasPrice,
+	//	GasFeeCap:   evm.Msg.GasFeeCap(),
+	//	GasTipCap:   evm.Msg.GasTipCap(),
+	//	Value:       evm.Msg.Value(),
+	//	TxType:      0,
+	//	TxData:      evm.Msg.Data(),
+	//	AccessList:  nil,
+	//	ChainId:     evm.chainRules.ChainID.String(),
+	//	CurrInnerTx: &types.InnerMessage{
+	//		To:    &addr,
+	//		From:  caller.Address(),
+	//		Data:  input,
+	//		Value: value,
+	//		Gas:   new(big.Int).SetUint64(gas),
+	//		Index: tracer.CallTree().Current().Index,
+	//	},
+	//}
 
-	aspectRes := djpm.AspectInstance().PreContractCall(request)
-	if aspectRes.HasErr() {
-		return nil, gas, aspectRes.Err
-	}
+	//aspectRes := djpm.AspectInstance().PreContractCall(request)
+	//if aspectRes.HasErr() {
+	//	return nil, gas, aspectRes.Err
+	//}
 
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
@@ -285,10 +283,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
 
-	aspectRes = djpm.AspectInstance().PostContractCall(request)
-	if aspectRes.HasErr() {
-		return ret, gas, aspectRes.Err
-	}
+	//aspectRes = djpm.AspectInstance().PostContractCall(request)
+	//if aspectRes.HasErr() {
+	//	return ret, gas, aspectRes.Err
+	//}
 
 	return ret, gas, err
 }
