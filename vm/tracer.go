@@ -3,7 +3,6 @@ package vm
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 	"math/big"
@@ -155,19 +154,6 @@ func (s *StateChanges) saveRawStateChange(account common.Address, slot uint256.I
 
 // saveKey saves a storage key to the state change tree
 func (s *StateChanges) saveKey(account common.Address, parent, self, offset *uint256.Int, typeId, parentTypeId common.Hash, index []byte) (err error) {
-	fmt.Println("====================================")
-	fmt.Printf("Saving storage key for account %s\n", account.Hex())
-	if parent != nil {
-		fmt.Printf("Parent: %s\n", parent.Hex())
-	}
-	fmt.Printf("Key Slot: %s\n", self.Hex())
-	if offset != nil {
-		fmt.Printf("Offset: %s\n", offset.Hex())
-	}
-	fmt.Printf("Type Id: %s\n", typeId.Hex())
-	fmt.Printf("Parent Type Id: %s\n", parentTypeId.Hex())
-	fmt.Printf("Index: %s\n", string(index))
-
 	offsetU8 := uint8(0)
 	if offset != nil {
 		offsetU64, overflow := offset.Uint64WithOverflow()
@@ -179,14 +165,12 @@ func (s *StateChanges) saveKey(account common.Address, parent, self, offset *uin
 
 	var child *StorageKey
 	if parent == nil {
-		fmt.Println("Saving root key")
 		// dealing with top level state var
 		if s.roots[account] == nil {
 			s.roots[account] = NewRootKey()
 		}
 		child, err = s.roots[account].AddChild(NewBranchKey(self, offsetU8, typeId, index))
 	} else {
-		fmt.Println("Saving child key")
 		// dealing with nested state var
 		parentKey := s.findKey(account, parent, 0, parentTypeId)
 		if parentKey == nil {
@@ -201,7 +185,6 @@ func (s *StateChanges) saveKey(account common.Address, parent, self, offset *uin
 	}
 
 	s.addKey(account, child.Slot(), child.Offset(), child)
-	fmt.Println("====================================")
 	return
 }
 
