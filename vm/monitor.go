@@ -170,8 +170,9 @@ type InnerTransaction struct {
 	Value *uint256.Int
 	Gas   *uint256.Int
 
-	index  uint64
-	parent *InnerTransaction
+	index    uint64
+	parent   *InnerTransaction
+	children []*InnerTransaction
 }
 
 // IsHead checks whether current inner transaction is the original transaction
