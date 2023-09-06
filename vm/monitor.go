@@ -13,9 +13,9 @@ const (
 )
 
 type State struct {
-	Account      common.Address // the account that triggered the state change
-	InnerTxIndex uint64         // index of inner tx that is causing the state change
-	Value        []byte         // raw data of the updated state
+	Account      common.Address `json:"account"`        // the account that triggered the state change
+	InnerTxIndex uint64         `json:"inner_tx_index"` // index of inner tx that is causing the state change
+	Value        []byte         `json:"value"`          // raw data of the updated state
 }
 
 // Eq compares two states, return true if two states are equal
@@ -29,8 +29,8 @@ func (s *State) Eq(other *State) bool {
 // StateChanges saves the changes of current state
 // the mapping is address -> slot -> index -> changes
 type StateChanges struct {
-	slotIndex map[common.Address]map[uint256.Int]string
-	changes   map[common.Address]map[string]map[string][]*State
+	slotIndex map[common.Address]map[uint256.Int]string         `json:"slot_index"`
+	changes   map[common.Address]map[string]map[string][]*State `json:"changes"`
 }
 
 // NewStateChanges create a new instance of state change cache
@@ -164,14 +164,15 @@ func (s *StateChanges) IndicesOfChanges(account common.Address, stateVarName str
 
 // InnerTransaction records the current contract call information
 type InnerTransaction struct {
-	From  common.Address
-	To    common.Address
-	Data  []byte
-	Value *uint256.Int
-	Gas   *uint256.Int
+	From  common.Address `json:"from"`
+	To    common.Address `json:"to"`
+	Data  []byte         `json:"data"`
+	Value *uint256.Int   `json:"value"`
+	Gas   *uint256.Int   `json:"gas"`
+	Ret   []byte         `json:"ret"`
 
-	index  uint64
-	parent *InnerTransaction
+	index  uint64            `json:"index"`
+	parent *InnerTransaction `json:"parent"`
 }
 
 // IsHead checks whether current inner transaction is the original transaction
@@ -192,9 +193,9 @@ func (it *InnerTransaction) Index() uint64 {
 
 // CallStacks record the current smart contract call stack
 type CallStacks struct {
-	head    *InnerTransaction // head is the beginning of all inner transaction, same with original transaction
-	current *InnerTransaction // current inner transaction
-	count   uint64            // inner transaction count, used for inner tx index
+	head    *InnerTransaction `json:"head"`    // head is the beginning of all inner transaction, same with original transaction
+	current *InnerTransaction `json:"current"` // current inner transaction
+	count   uint64            `json:"count"`   // inner transaction count, used for inner tx index
 }
 
 // Push a new inner transaction to the current call stacks
@@ -244,8 +245,8 @@ func (c *CallStacks) ParentOf(index uint64) *InnerTransaction {
 
 // Monitor monitors the state changes and traces the call stack changes during a tx execution
 type Monitor struct {
-	states     *StateChanges
-	callstacks *CallStacks
+	states     *StateChanges `json:"stateChanges"`
+	callstacks *CallStacks   `json:"callstacks"`
 }
 
 // NewMonitor creates a new instance of monitor

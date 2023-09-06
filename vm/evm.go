@@ -205,37 +205,36 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	// Reset call stack to its parent
 	defer callstacks.Pop()
-
-	// aspect PreTxExecute start
-	request := &types.RequestEthMsgAspect{
-		BlockHeight: int64(evm.Context.BlockNumber.Uint64()),
-		TxHash:      nil,
-		TxIndex:     0,
-		To:          evm.Msg.To(),
-		From:        evm.Origin,
-		Nonce:       evm.StateDB.GetNonce(caller.Address()),
-		GasLimit:    evm.Msg.Gas(),
-		GasPrice:    evm.GasPrice,
-		GasFeeCap:   evm.Msg.GasFeeCap(),
-		GasTipCap:   evm.Msg.GasTipCap(),
-		Value:       evm.Msg.Value(),
-		TxType:      0,
-		TxData:      evm.Msg.Data(),
-		AccessList:  nil,
+	blockNum := evm.Context.BlockNumber.Uint64()
+	blockHash := evm.Context.GetHash(blockNum)
+	tx := &types.EthTransaction{
+		BlockHash:   blockHash.Bytes(),
+		BlockNumber: int64(blockNum),
+		From:        evm.Origin.Hex(),
+		Gas:         evm.Msg.Gas(),
+		GasPrice:    evm.GasPrice.String(),
+		GasFeeCap:   evm.Msg.GasFeeCap().String(),
+		GasTipCap:   evm.Msg.GasTipCap().String(),
+		Input:       evm.Msg.Data(),
+		To:          evm.Msg.To().Hex(),
+		Value:       evm.Msg.Value().String(),
 		ChainId:     evm.chainRules.ChainID.String(),
-		CurrInnerTx: &types.InnerMessage{
-			To:    &addr,
-			From:  caller.Address(),
-			Data:  input,
-			Value: value,
-			Gas:   new(big.Int).SetUint64(gas),
-			Index: callstacks.Current().Index(),
-		},
 	}
-
-	aspectRes := djpm.AspectInstance().PreContractCall(request)
-	if aspectRes.HasErr() {
-		return nil, gas, aspectRes.Err
+	inner := &types.EthStackTransaction{
+		From:  caller.Address().Hex(),
+		To:    addr.Hex(),
+		Data:  input,
+		Value: value.String(),
+		Gas:   new(big.Int).SetUint64(gas).String(),
+		Index: callstacks.Current().Index(),
+	}
+	txAspect := &types.EthTxAspect{
+		Tx:          tx,
+		CurrInnerTx: inner,
+	}
+	aspectRes := djpm.AspectInstance().PreContractCall(txAspect)
+	if hasErr, err := aspectRes.HasErr(); hasErr {
+		return nil, gas, err
 	}
 
 	// Fail if we're trying to execute above the call depth limit
@@ -292,11 +291,27 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
 
-	aspectRes = djpm.AspectInstance().PostContractCall(request)
-	if aspectRes.HasErr() {
-		return ret, gas, aspectRes.Err
+	innerTxIndex := types.Ternary(callstacks.Current() != nil, func() uint64 { return callstacks.Current().Index() }, 0)
+	parentIndex := types.Ternary(callstacks.Current() != nil && callstacks.Current().Parent() != nil, func() uint64 { return callstacks.Current().Parent().Index() }, 0)
+	retInnerTx := &types.EthStackTransaction{
+		From:        caller.Address().Hex(),
+		To:          addr.Hex(),
+		Data:        input,
+		Value:       value.String(),
+		Gas:         new(big.Int).SetUint64(gas).String(),
+		Index:       innerTxIndex,
+		Ret:         ret,
+		LeftOverGas: gas,
+		ParentIndex: parentIndex,
 	}
-
+	retAspect := &types.EthTxAspect{
+		Tx:          tx,
+		CurrInnerTx: retInnerTx,
+	}
+	aspectRes = djpm.AspectInstance().PostContractCall(retAspect)
+	if hasErr, postErr := aspectRes.HasErr(); hasErr {
+		return ret, gas, postErr
+	}
 	return ret, gas, err
 }
 

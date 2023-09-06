@@ -15,7 +15,7 @@ require (
 	cosmossdk.io/math v1.0.0 // indirect
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
 	github.com/VictoriaMetrics/fastcache v1.6.0 // indirect
-	github.com/artela-network/runtime v0.3.0-alpha // indirect
+	github.com/artela-network/runtime v0.3.1-alpha // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
 	github.com/bytecodealliance/wasmtime-go/v7 v7.0.0 // indirect
@@ -114,8 +114,9 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
+replace github.com/ethereum/go-ethereum => github.com/ethereum/go-ethereum v1.10.26
+
 replace (
 	github.com/artela-network/artelasdk => ../artelasdk
 	github.com/artela-network/runtime => ../runtime
-	github.com/ethereum/go-ethereum => github.com/ethereum/go-ethereum v1.10.26
 )
