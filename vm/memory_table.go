@@ -111,14 +111,3 @@ func memoryRevert(stack *Stack) (uint64, bool) {
 func memoryLog(stack *Stack) (uint64, bool) {
 	return calcMemSize64(stack.Back(0), stack.Back(1))
 }
-
-func makeMemoryJournal(size uint64) func(stack *Stack) (uint64, bool) {
-	return func(stack *Stack) (uint64, bool) {
-		memLen := stack.Back(1)
-		if u64Len, overflow := memLen.Uint64WithOverflow(); overflow {
-			return 0, true
-		} else {
-			return u64Len, false
-		}
-	}
-}

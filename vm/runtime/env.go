@@ -17,8 +17,8 @@
 package runtime
 
 import (
-	"github.com/artela-network/evm/core"
-	"github.com/artela-network/evm/vm"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {

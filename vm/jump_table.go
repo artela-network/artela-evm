@@ -55,6 +55,7 @@ var (
 	berlinInstructionSet           = newBerlinInstructionSet()
 	londonInstructionSet           = newLondonInstructionSet()
 	mergeInstructionSet            = newMergeInstructionSet()
+	shanghaiInstructionSet         = newShanghaiInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -78,9 +79,16 @@ func validate(jt JumpTable) JumpTable {
 	return jt
 }
 
+func newShanghaiInstructionSet() JumpTable {
+	instructionSet := newMergeInstructionSet()
+	enable3855(&instructionSet) // PUSH0 instruction
+	enable3860(&instructionSet) // Limit and meter initcode
+	return validate(instructionSet)
+}
+
 func newMergeInstructionSet() JumpTable {
 	instructionSet := newLondonInstructionSet()
-	instructionSet[RANDOM] = &operation{
+	instructionSet[PREVRANDAO] = &operation{
 		execute:     opRandom,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
@@ -90,7 +98,7 @@ func newMergeInstructionSet() JumpTable {
 }
 
 // newLondonInstructionSet returns the frontier, homestead, byzantium,
-// contantinople, istanbul, petersburg, berlin and london instructions.
+// constantinople, istanbul, petersburg, berlin and london instructions.
 func newLondonInstructionSet() JumpTable {
 	instructionSet := newBerlinInstructionSet()
 	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
@@ -99,7 +107,7 @@ func newLondonInstructionSet() JumpTable {
 }
 
 // newBerlinInstructionSet returns the frontier, homestead, byzantium,
-// contantinople, istanbul, petersburg and berlin instructions.
+// constantinople, istanbul, petersburg and berlin instructions.
 func newBerlinInstructionSet() JumpTable {
 	instructionSet := newIstanbulInstructionSet()
 	enable2929(&instructionSet) // Access lists for trie accesses https://eips.ethereum.org/EIPS/eip-2929
@@ -107,7 +115,7 @@ func newBerlinInstructionSet() JumpTable {
 }
 
 // newIstanbulInstructionSet returns the frontier, homestead, byzantium,
-// contantinople, istanbul and petersburg instructions.
+// constantinople, istanbul and petersburg instructions.
 func newIstanbulInstructionSet() JumpTable {
 	instructionSet := newConstantinopleInstructionSet()
 
@@ -119,7 +127,7 @@ func newIstanbulInstructionSet() JumpTable {
 }
 
 // newConstantinopleInstructionSet returns the frontier, homestead,
-// byzantium and contantinople instructions.
+// byzantium and constantinople instructions.
 func newConstantinopleInstructionSet() JumpTable {
 	instructionSet := newByzantiumInstructionSet()
 	instructionSet[SHL] = &operation{
@@ -995,33 +1003,53 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:   maxStack(6, 0),
 			memorySize: memoryLog,
 		},
-		VJOURNAL5: {
-			execute:    makeValueJournal(5),
-			dynamicGas: makeGasJournal(5),
-			minStack:   minStack(5, 0),
-			maxStack:   maxStack(5, 0),
-			memorySize: makeMemoryJournal(5),
-		},
-		VJOURNAL7: {
-			execute:    makeValueJournal(7),
-			dynamicGas: makeGasJournal(7),
-			minStack:   minStack(7, 0),
-			maxStack:   maxStack(7, 0),
-			memorySize: makeMemoryJournal(7),
-		},
-		RJOURNAL3: {
-			execute:    makeReferenceJournal(3),
+		RSVJNAL: {
+			execute:    opReferenceStateVarJournal,
 			dynamicGas: makeGasJournal(3),
 			minStack:   minStack(3, 0),
 			maxStack:   maxStack(3, 0),
-			memorySize: makeMemoryJournal(3),
 		},
-		RJOURNAL5: {
-			execute:    makeReferenceJournal(5),
+		VSVJNAL: {
+			execute:    opValueStateVarJournal,
+			dynamicGas: makeGasJournal(4),
+			minStack:   minStack(4, 0),
+			maxStack:   maxStack(4, 0),
+		},
+		IRVVJNAL: {
+			execute:    opReferenceIndexValueStorageJournal,
+			dynamicGas: makeGasJournal(6),
+			minStack:   minStack(6, 0),
+			maxStack:   maxStack(6, 0),
+		},
+		IRVRJNAL: {
+			execute:    opReferenceIndexReferenceStorageJournal,
 			dynamicGas: makeGasJournal(5),
 			minStack:   minStack(5, 0),
 			maxStack:   maxStack(5, 0),
-			memorySize: makeMemoryJournal(5),
+		},
+		IVVVJNAL: {
+			execute:    opValueIndexValueStorageJournal,
+			dynamicGas: makeGasJournal(6),
+			minStack:   minStack(6, 0),
+			maxStack:   maxStack(6, 0),
+		},
+		IVVRJNAL: {
+			execute:    opValueIndexReferenceStorageJournal,
+			dynamicGas: makeGasJournal(5),
+			minStack:   minStack(5, 0),
+			maxStack:   maxStack(5, 0),
+		},
+		VVJNAL: {
+			execute:    opValueChangeJournal,
+			dynamicGas: makeGasJournal(4),
+			minStack:   minStack(4, 0),
+			maxStack:   maxStack(4, 0),
+		},
+		VRJNAL: {
+			execute:    opReferenceChangeJournal,
+			dynamicGas: makeGasJournal(2),
+			minStack:   minStack(2, 0),
+			maxStack:   maxStack(2, 0),
 		},
 		CREATE: {
 			execute:     opCreate,
@@ -1070,4 +1098,15 @@ func newFrontierInstructionSet() JumpTable {
 	}
 
 	return validate(tbl)
+}
+
+func copyJumpTable(source *JumpTable) *JumpTable {
+	dest := *source
+	for i, op := range source {
+		if op != nil {
+			opCopy := *op
+			dest[i] = &opCopy
+		}
+	}
+	return &dest
 }

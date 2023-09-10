@@ -79,15 +79,16 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 // PrecompiledContractsBerlin contains the default set of pre-compiled Ethereum
 // contracts used in the Berlin release.
 var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}): &blake2F{},
+	common.BytesToAddress([]byte{1}):   &ecrecover{},
+	common.BytesToAddress([]byte{2}):   &sha256hash{},
+	common.BytesToAddress([]byte{3}):   &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):   &dataCopy{},
+	common.BytesToAddress([]byte{5}):   &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):   &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):   &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):   &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):   &blake2F{},
+	common.BytesToAddress([]byte{100}): &context{store: make(map[string]string)},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -235,7 +236,7 @@ func (c *dataCopy) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.IdentityPerWordGas + params.IdentityBaseGas
 }
 func (c *dataCopy) Run(in []byte) ([]byte, error) {
-	return in, nil
+	return common.CopyBytes(in), nil
 }
 
 // bigModExp implements a native big integer exponential modular operation.
@@ -263,11 +264,10 @@ var (
 
 // modexpMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
 //
-// def mult_complexity(x):
-//
-//	if x <= 64: return x ** 2
-//	elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
-//	else: return x ** 2 // 16 + 480 * x - 199680
+//	def mult_complexity(x):
+//		if x <= 64: return x ** 2
+//		elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
+//		else: return x ** 2 // 16 + 480 * x - 199680
 //
 // where is x is max(length_of_MODULUS, length_of_BASE)
 func modexpMultComplexity(x *big.Int) *big.Int {
@@ -381,12 +381,19 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 		base = new(big.Int).SetBytes(getData(input, 0, baseLen))
 		exp  = new(big.Int).SetBytes(getData(input, baseLen, expLen))
 		mod  = new(big.Int).SetBytes(getData(input, baseLen+expLen, modLen))
+		v    []byte
 	)
-	if mod.BitLen() == 0 {
+	switch {
+	case mod.BitLen() == 0:
 		// Modulo 0 is undefined, return zero
 		return common.LeftPadBytes([]byte{}, int(modLen)), nil
+	case base.BitLen() == 1: // a bit length of 1 means it's 1 (or -1).
+		//If base == 1, then we can just return base % mod (if mod >= 1, which it is)
+		v = base.Mod(base, mod).Bytes()
+	default:
+		v = base.Exp(base, exp, mod).Bytes()
 	}
-	return common.LeftPadBytes(base.Exp(base, exp, mod).Bytes(), int(modLen)), nil
+	return common.LeftPadBytes(v, int(modLen)), nil
 }
 
 // newCurvePoint unmarshals a binary blob into a bn256 elliptic curve point,
@@ -936,7 +943,7 @@ func (c *bls12381Pairing) Run(input []byte) ([]byte, error) {
 			return nil, errBLS12381G2PointSubgroup
 		}
 
-		// Update pairing engine with G1 and G2 ponits
+		// Update pairing engine with G1 and G2 points
 		e.AddPair(p1, p2)
 	}
 	// Prepare 32 byte output
@@ -1041,4 +1048,25 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 
 	// Encode the G2 point to 256 bytes
 	return g.EncodePoint(r), nil
+}
+
+// CONTEXT implemented runtime context query as a native contract.
+type context struct {
+	store map[string]string // use this for now, switch to context later
+}
+
+func (c *context) RequiredGas(input []byte) uint64 {
+	// TODO: refactor this later
+	return 5000
+}
+
+func (c *context) Run(input []byte) ([]byte, error) {
+	if input == nil || len(input) == 0 {
+		return nil, nil
+	}
+
+	key := string(input)
+
+	// TODO: retrieve content from context with given key
+	return []byte(c.store[key]), nil
 }

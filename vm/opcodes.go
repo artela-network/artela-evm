@@ -25,11 +25,7 @@ type OpCode byte
 
 // IsPush specifies if an opcode is a PUSH opcode.
 func (op OpCode) IsPush() bool {
-	switch op {
-	case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
-		return true
-	}
-	return false
+	return PUSH1 <= op && op <= PUSH32
 }
 
 // 0x0 range - arithmetic ops.
@@ -99,6 +95,7 @@ const (
 	NUMBER      OpCode = 0x43
 	DIFFICULTY  OpCode = 0x44
 	RANDOM      OpCode = 0x44 // Same as DIFFICULTY
+	PREVRANDAO  OpCode = 0x44 // Same as DIFFICULTY
 	GASLIMIT    OpCode = 0x45
 	CHAINID     OpCode = 0x46
 	SELFBALANCE OpCode = 0x47
@@ -207,12 +204,22 @@ const (
 	LOG4
 )
 
-// 0xe0 range - monitor related ops
+// 0xb0 range.
 const (
-	RJOURNAL3 OpCode = 0xe0 + iota
-	RJOURNAL5
-	VJOURNAL5
-	VJOURNAL7
+	TLOAD  OpCode = 0xb3
+	TSTORE OpCode = 0xb4
+)
+
+// 0xe0 range - tracer related ops
+const (
+	RSVJNAL OpCode = 0xe0 + iota
+	VSVJNAL
+	IRVVJNAL
+	IRVRJNAL
+	IVVVJNAL
+	IVVRJNAL
+	VVJNAL
+	VRJNAL
 )
 
 // 0xf0 range - closures.
@@ -288,16 +295,14 @@ var opCodeToString = map[OpCode]string{
 	COINBASE:    "COINBASE",
 	TIMESTAMP:   "TIMESTAMP",
 	NUMBER:      "NUMBER",
-	DIFFICULTY:  "DIFFICULTY", // TODO (MariusVanDerWijden) rename to RANDOM post merge
+	DIFFICULTY:  "DIFFICULTY", // TODO (MariusVanDerWijden) rename to PREVRANDAO post merge
 	GASLIMIT:    "GASLIMIT",
 	CHAINID:     "CHAINID",
 	SELFBALANCE: "SELFBALANCE",
 	BASEFEE:     "BASEFEE",
 
 	// 0x50 range - 'storage' and execution.
-	POP: "POP",
-	//DUP:     "DUP",
-	//SWAP:    "SWAP",
+	POP:      "POP",
 	MLOAD:    "MLOAD",
 	MSTORE:   "MSTORE",
 	MSTORE8:  "MSTORE8",
@@ -311,7 +316,7 @@ var opCodeToString = map[OpCode]string{
 	JUMPDEST: "JUMPDEST",
 	PUSH0:    "PUSH0",
 
-	// 0x60 range - push.
+	// 0x60 range - pushes.
 	PUSH1:  "PUSH1",
 	PUSH2:  "PUSH2",
 	PUSH3:  "PUSH3",
@@ -345,6 +350,7 @@ var opCodeToString = map[OpCode]string{
 	PUSH31: "PUSH31",
 	PUSH32: "PUSH32",
 
+	// 0x80 - dups.
 	DUP1:  "DUP1",
 	DUP2:  "DUP2",
 	DUP3:  "DUP3",
@@ -362,6 +368,7 @@ var opCodeToString = map[OpCode]string{
 	DUP15: "DUP15",
 	DUP16: "DUP16",
 
+	// 0x90 - swaps.
 	SWAP1:  "SWAP1",
 	SWAP2:  "SWAP2",
 	SWAP3:  "SWAP3",
@@ -378,13 +385,29 @@ var opCodeToString = map[OpCode]string{
 	SWAP14: "SWAP14",
 	SWAP15: "SWAP15",
 	SWAP16: "SWAP16",
-	LOG0:   "LOG0",
-	LOG1:   "LOG1",
-	LOG2:   "LOG2",
-	LOG3:   "LOG3",
-	LOG4:   "LOG4",
 
-	// 0xf0 range.
+	// 0xa0 range - logging ops.
+	LOG0: "LOG0",
+	LOG1: "LOG1",
+	LOG2: "LOG2",
+	LOG3: "LOG3",
+	LOG4: "LOG4",
+
+	// 0xb0 range.
+	TLOAD:  "TLOAD",
+	TSTORE: "TSTORE",
+
+	// 0xe0 range.
+	RSVJNAL:  "RSVJNAL",
+	VSVJNAL:  "VSVJNAL",
+	IRVVJNAL: "IRVVJNAL",
+	IRVRJNAL: "IRVRJNAL",
+	IVVVJNAL: "IVVVJNAL",
+	IVVRJNAL: "IVVRJNAL",
+	VVJNAL:   "VVJNAL",
+	VRJNAL:   "VRJNAL",
+
+	// 0xf0 range - closures.
 	CREATE:       "CREATE",
 	CALL:         "CALL",
 	RETURN:       "RETURN",
@@ -543,6 +566,16 @@ var stringToOp = map[string]OpCode{
 	"LOG2":           LOG2,
 	"LOG3":           LOG3,
 	"LOG4":           LOG4,
+	"TLOAD":          TLOAD,
+	"TSTORE":         TSTORE,
+	"RSVJNAL":        RSVJNAL,
+	"VSVJNAL":        VSVJNAL,
+	"IRVVJNAL":       IRVVJNAL,
+	"IRVRJNAL":       IRVRJNAL,
+	"IVVVJNAL":       IVVVJNAL,
+	"IVVRJNAL":       IVVRJNAL,
+	"VVJNAL":         VVJNAL,
+	"VRJNAL":         VRJNAL,
 	"CREATE":         CREATE,
 	"CREATE2":        CREATE2,
 	"CALL":           CALL,
