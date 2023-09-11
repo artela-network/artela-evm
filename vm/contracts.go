@@ -303,7 +303,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	} else {
 		input = input[:0]
 	}
-	// Retrieve the head 32 bytes of exp for the adjusted exponent length
+	// Retrieve the root 32 bytes of exp for the adjusted exponent length
 	var expHead *big.Int
 	if big.NewInt(int64(len(input))).Cmp(baseLen) <= 0 {
 		expHead = new(big.Int)
