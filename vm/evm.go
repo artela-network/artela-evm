@@ -17,14 +17,15 @@
 package vm
 
 import (
-	"math/big"
-	"sync/atomic"
-	"time"
-
+	"github.com/artela-network/artelasdk/djpm"
+	"github.com/artela-network/artelasdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"math/big"
+	"sync/atomic"
+	"time"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -197,38 +198,37 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	// exit from a call
 	defer tracer.ExitCall()
-
-	// aspect PreTxExecute start
-	//request := &types.RequestEthMsgAspect{
-	//	BlockHeight: int64(evm.Context.BlockNumber.Uint64()),
-	//	TxHash:      nil,
-	//	TxIndex:     0,
-	//	To:          evm.Msg.To(),
-	//	From:        evm.Origin,
-	//	Nonce:       evm.StateDB.GetNonce(caller.Address()),
-	//	GasLimit:    evm.Msg.Gas(),
-	//	GasPrice:    evm.GasPrice,
-	//	GasFeeCap:   evm.Msg.GasFeeCap(),
-	//	GasTipCap:   evm.Msg.GasTipCap(),
-	//	Value:       evm.Msg.Value(),
-	//	TxType:      0,
-	//	TxData:      evm.Msg.Data(),
-	//	AccessList:  nil,
-	//	ChainId:     evm.chainRules.ChainID.String(),
-	//	CurrInnerTx: &types.InnerMessage{
-	//		To:    &addr,
-	//		From:  caller.Address(),
-	//		Data:  input,
-	//		Value: value,
-	//		Gas:   new(big.Int).SetUint64(gas),
-	//		Index: tracer.CallTree().Current().Index,
-	//	},
-	//}
-
-	//aspectRes := djpm.AspectInstance().PreContractCall(request)
-	//if aspectRes.HasErr() {
-	//	return nil, gas, aspectRes.Err
-	//}
+	blockNum := evm.Context.BlockNumber.Uint64()
+	blockHash := evm.Context.GetHash(blockNum)
+	tx := &types.EthTransaction{
+		BlockHash:   blockHash.Bytes(),
+		BlockNumber: int64(blockNum),
+		From:        evm.Origin.Hex(),
+		Gas:         evm.Msg.Gas(),
+		GasPrice:    evm.GasPrice.String(),
+		GasFeeCap:   evm.Msg.GasFeeCap().String(),
+		GasTipCap:   evm.Msg.GasTipCap().String(),
+		Input:       evm.Msg.Data(),
+		To:          evm.Msg.To().Hex(),
+		Value:       evm.Msg.Value().String(),
+		ChainId:     evm.chainRules.ChainID.String(),
+	}
+	inner := &types.EthStackTransaction{
+		From:  caller.Address().Hex(),
+		To:    addr.Hex(),
+		Data:  input,
+		Value: value.String(),
+		Gas:   new(big.Int).SetUint64(gas).String(),
+		Index: tracer.CurrentCallIndex(),
+	}
+	txAspect := &types.EthTxAspect{
+		Tx:          tx,
+		CurrInnerTx: inner,
+	}
+	aspectRes := djpm.AspectInstance().PreContractCall(txAspect)
+	if hasErr, err := aspectRes.HasErr(); hasErr {
+		return nil, gas, err
+	}
 
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
@@ -283,10 +283,27 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
 
-	//aspectRes = djpm.AspectInstance().PostContractCall(request)
-	//if aspectRes.HasErr() {
-	//	return ret, gas, aspectRes.Err
-	//}
+	innerTxIndex := tracer.CurrentCallIndex()
+	parentIndex := types.Ternary(tracer.callTree.current != nil && tracer.callTree.current.Parent != nil, func() uint64 { return tracer.callTree.current.Parent.Index }, -1)
+	retInnerTx := &types.EthStackTransaction{
+		From:        caller.Address().Hex(),
+		To:          addr.Hex(),
+		Data:        input,
+		Value:       value.String(),
+		Gas:         new(big.Int).SetUint64(gas).String(),
+		Index:       innerTxIndex,
+		Ret:         ret,
+		LeftOverGas: gas,
+		ParentIndex: parentIndex,
+	}
+	retAspect := &types.EthTxAspect{
+		Tx:          tx,
+		CurrInnerTx: retInnerTx,
+	}
+	aspectRes = djpm.AspectInstance().PostContractCall(retAspect)
+	if hasErr, postErr := aspectRes.HasErr(); hasErr {
+		return ret, gas, postErr
+	}
 
 	return ret, gas, err
 }
