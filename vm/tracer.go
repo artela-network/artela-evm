@@ -327,14 +327,16 @@ func (s *StateChanges) IndicesOfChanges(account common.Address, stateVarName str
 
 // Call records the current contract call information
 type Call struct {
-	From     common.Address `json:"from"`
-	To       common.Address `json:"to"`
-	Data     []byte         `json:"data"`
-	Value    *uint256.Int   `json:"value"`
-	Gas      *uint256.Int   `json:"gas"`
-	Index    uint64         `json:"index"`
-	Parent   *Call          `json:"parent"`
-	Children []*Call        `json:"children"`
+	From         common.Address `json:"from"`
+	To           common.Address `json:"to"`
+	Data         []byte         `json:"data"`
+	Value        *uint256.Int   `json:"value"`
+	Gas          *uint256.Int   `json:"gas"`
+	Index        uint64         `json:"index"`
+	Parent       *Call          `json:"parent"`
+	Children     []*Call        `json:"children"`
+	Ret          []byte         `json:"ret"`
+	RemainingGas uint64         `json:"remainingGas"`
 }
 
 // IsRoot checks whether current call is the original call
@@ -342,9 +344,24 @@ func (c *Call) IsRoot() bool {
 	return c.Parent == nil
 }
 
+// ParentIndex returns the index of Parent call
+func (c *Call) ParentIndex() uint64 {
+	return c.Parent.Index
+}
+
+// ChildrenIndices returns the indices of all children calls
+func (c *Call) ChildrenIndices() []uint64 {
+	indices := make([]uint64, len(c.Children))
+	for i, call := range c.Children {
+		indices[i] = call.Index
+	}
+
+	return indices
+}
+
 // CallTree record the current smart contract call tree
 type CallTree struct {
-	head    *Call            // head is the beginning of all call, same with original transaction
+	root    *Call            // root is the beginning of all call, same with original transaction
 	current *Call            // current call
 	count   uint64           // call count, used for call Index
 	lookup  map[uint64]*Call // lookup table for call Index
@@ -369,8 +386,8 @@ func (c *CallTree) add(from, to common.Address, data []byte, value, gas *uint256
 		Index:  c.count,
 	}
 
-	if c.head == nil {
-		c.head = newCall
+	if c.root == nil {
+		c.root = newCall
 	}
 
 	if c.current != nil {
@@ -384,16 +401,20 @@ func (c *CallTree) add(from, to common.Address, data []byte, value, gas *uint256
 }
 
 // exit from a call, reset current to its Parent
-func (c *CallTree) exit() {
+func (c *CallTree) exit(leftoverGas uint64, ret []byte) {
 	if c.current == nil {
 		return
 	}
+
+	c.current.RemainingGas = leftoverGas
+	c.current.Ret = ret
+
 	c.current = c.current.Parent
 }
 
-// Head returns the call that initiated by the original transaction
-func (c *CallTree) Head() *Call {
-	return c.head
+// Root returns the call that initiated by the original transaction
+func (c *CallTree) Root() *Call {
+	return c.root
 }
 
 // Current returns the current call
@@ -409,6 +430,11 @@ func (c *CallTree) ParentOf(index uint64) *Call {
 	}
 
 	return node.Parent
+}
+
+// FindCall finds a call by its Index
+func (c *CallTree) FindCall(index uint64) *Call {
+	return c.lookup[index]
 }
 
 // ChildrenOf finds the Children of a given Index
@@ -461,8 +487,8 @@ func (t *Tracer) SaveCall(from, to common.Address, data []byte, value *uint256.I
 }
 
 // ExitCall exits from current call stack
-func (t *Tracer) ExitCall() {
-	t.callTree.exit()
+func (t *Tracer) ExitCall(leftoverGas uint64, ret []byte) {
+	t.callTree.exit(leftoverGas, ret)
 }
 
 // CallTree returns the current call tree
