@@ -284,7 +284,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	innerTxIndex := tracer.CurrentCallIndex()
-	parentIndex := types.Ternary(tracer.callTree.current != nil && tracer.callTree.current.Parent != nil, func() uint64 { return tracer.callTree.current.Parent.Index }, -1)
+	parentIndex := types.Ternary(tracer.callTree.current != nil && tracer.callTree.current.Parent != nil, func() uint64 { return tracer.callTree.current.Parent.Index }, 0)
 	retInnerTx := &types.EthStackTransaction{
 		From:        caller.Address().Hex(),
 		To:          addr.Hex(),
