@@ -197,7 +197,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	tracer.SaveCall(caller.Address(), addr, input, uint256.MustFromBig(value), uint256.NewInt(gas))
 
 	// exit from a call
-	defer tracer.ExitCall()
+	defer func() {
+		tracer.ExitCall(leftOverGas, ret)
+	}()
+
 	blockNum := evm.Context.BlockNumber.Uint64()
 	blockHash := evm.Context.GetHash(blockNum)
 	tx := &types.EthTransaction{
@@ -224,6 +227,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	txAspect := &types.EthTxAspect{
 		Tx:          tx,
 		CurrInnerTx: inner,
+		GasInfo:     &types.GasInfo{Gas: gas},
 	}
 	aspectRes := djpm.AspectInstance().PreContractCall(txAspect)
 	if hasErr, err := aspectRes.HasErr(); hasErr {
@@ -299,6 +303,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	retAspect := &types.EthTxAspect{
 		Tx:          tx,
 		CurrInnerTx: retInnerTx,
+		GasInfo:     &types.GasInfo{Gas: gas},
 	}
 	aspectRes = djpm.AspectInstance().PostContractCall(retAspect)
 	if hasErr, postErr := aspectRes.HasErr(); hasErr {
@@ -443,12 +448,14 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
-	callstacks := evm.Tracer().CallTree()
-	callstacks.add(caller.Address(), address, codeAndHash.code, uint256.MustFromBig(value), uint256.NewInt(gas))
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) (ret []byte, addr common.Address, leftoverGas uint64, err error) {
+	tracer := evm.Tracer()
+	tracer.SaveCall(caller.Address(), address, codeAndHash.code, uint256.MustFromBig(value), uint256.NewInt(gas))
 
 	// Reset call stack to its Parent
-	defer callstacks.exit()
+	defer func() {
+		tracer.ExitCall(leftoverGas, ret)
+	}()
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
@@ -489,7 +496,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	start := time.Now()
 
-	ret, err := evm.interpreter.Run(contract, nil, false)
+	ret, err = evm.interpreter.Run(contract, nil, false)
 
 	// Check whether the max code size has been exceeded, assign err if the case.
 	if err == nil && evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSize {
