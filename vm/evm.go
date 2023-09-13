@@ -18,8 +18,10 @@ package vm
 
 import (
 	"github.com/artela-network/artelasdk/djpm"
+	"github.com/artela-network/artelasdk/integration"
 	"github.com/artela-network/artelasdk/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -103,7 +105,11 @@ type TxContext struct {
 	GasPrice *big.Int       // Provides information for GASPRICE
 
 	// Original message info
-	Msg Message
+	Message Message
+}
+
+func (t *TxContext) Msg() integration.Message {
+	return t.Message
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -192,7 +198,7 @@ func (evm *EVM) Tracer() *Tracer {
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) Call(caller vm.ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	tracer := evm.Tracer()
 	tracer.SaveCall(caller.Address(), addr, input, uint256.MustFromBig(value), uint256.NewInt(gas))
 
@@ -207,13 +213,13 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		BlockHash:   blockHash.Bytes(),
 		BlockNumber: int64(blockNum),
 		From:        evm.Origin.Hex(),
-		Gas:         evm.Msg.Gas(),
+		Gas:         evm.Message.Gas(),
 		GasPrice:    evm.GasPrice.String(),
-		GasFeeCap:   evm.Msg.GasFeeCap().String(),
-		GasTipCap:   evm.Msg.GasTipCap().String(),
-		Input:       evm.Msg.Data(),
-		To:          evm.Msg.To().Hex(),
-		Value:       evm.Msg.Value().String(),
+		GasFeeCap:   evm.Message.GasFeeCap().String(),
+		GasTipCap:   evm.Message.GasTipCap().String(),
+		Input:       evm.Message.Data(),
+		To:          evm.Message.To().Hex(),
+		Value:       evm.Message.Value().String(),
 		ChainId:     evm.chainRules.ChainID.String(),
 	}
 	inner := &types.EthStackTransaction{
@@ -320,7 +326,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 //
 // CallCode differs from Call in the sense that it executes the given address'
 // code with the caller as context.
-func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) CallCode(caller vm.ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -360,7 +366,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 //
 // DelegateCall differs from CallCode in the sense that it executes the given address'
 // code with the caller as context and the caller is set to the caller of the caller.
-func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) DelegateCall(caller vm.ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -391,7 +397,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 // as parameters while disallowing any modifications to the state during the call.
 // Opcodes that attempt to perform such modifications will result in exceptions
 // instead of performing the modifications.
-func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) StaticCall(caller vm.ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -448,7 +454,7 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) (ret []byte, addr common.Address, leftoverGas uint64, err error) {
+func (evm *EVM) create(caller vm.ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) (ret []byte, addr common.Address, leftoverGas uint64, err error) {
 	tracer := evm.Tracer()
 	tracer.SaveCall(caller.Address(), address, codeAndHash.code, uint256.MustFromBig(value), uint256.NewInt(gas))
 
@@ -542,7 +548,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 }
 
 // Create creates a new contract using code as deployment code.
-func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) Create(caller vm.ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
 	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE)
 }
@@ -551,7 +557,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 //
 // The different between Create2 with Create is Create2 uses keccak256(0xff ++ msg.sender ++ salt ++ keccak256(init_code))[12:]
 // instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
-func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) Create2(caller vm.ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: code}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2)

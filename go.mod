@@ -16,6 +16,7 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
 	github.com/bytecodealliance/wasmtime-go/v9 v9.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/cosmos/btcutil v1.0.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/deckarep/golang-set v1.8.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
@@ -23,7 +24,6 @@ require (
 	github.com/dop251/goja v0.0.0-20230122112309-96b1610dd4f7 // indirect
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff // indirect
-	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
@@ -40,7 +40,6 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/onsi/gomega v1.20.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/tsdb v0.7.1 // indirect
 	github.com/rjeczalik/notify v0.9.1 // indirect
