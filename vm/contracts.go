@@ -20,6 +20,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	inherent "github.com/artela-network/artelasdk/chaincoreext/jit_inherent"
+	"github.com/artela-network/artelasdk/types"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -88,7 +90,8 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{7}):   &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{8}):   &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{9}):   &blake2F{},
-	common.BytesToAddress([]byte{100}): &context{store: make(map[string]string)},
+	common.BytesToAddress([]byte{100}): &context{},
+	common.BytesToAddress([]byte{101}): &userOpSender{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -1044,9 +1047,8 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 	return g.EncodePoint(r), nil
 }
 
-// CONTEXT implemented runtime context query as a native contract.
+// CONTEXT implemented aspect context query as a native contract.
 type context struct {
-	store map[string]string // use this for now, switch to context later
 }
 
 func (c *context) RequiredGas(input []byte) uint64 {
@@ -1055,12 +1057,35 @@ func (c *context) RequiredGas(input []byte) uint64 {
 }
 
 func (c *context) Run(input []byte) ([]byte, error) {
+	if input == nil || len(input) < 40 {
+		return nil, nil
+	}
+
+	aspectId := common.BytesToAddress(input[:20])
+	contractAddr := common.BytesToAddress(input[20:40])
+	key := string(input[40:])
+	value := types.GetAspectContext(contractAddr.Hex(), aspectId.Hex(), key)
+
+	return []byte(value), nil
+}
+
+// userOpSender implemented user operation sender aspect query for solidity.
+type userOpSender struct {
+}
+
+func (u *userOpSender) RequiredGas(input []byte) uint64 {
+	// TODO: refactor this later
+	return 5000
+}
+
+func (u *userOpSender) Run(input []byte) ([]byte, error) {
 	if input == nil || len(input) == 0 {
 		return nil, nil
 	}
 
-	key := string(input)
+	var userOpHash common.Hash
+	userOpHash.SetBytes(input)
 
-	// TODO: retrieve content from context with given key
-	return []byte(c.store[key]), nil
+	aspectId := inherent.Get().SenderAspect(userOpHash)
+	return aspectId.Bytes(), nil
 }
