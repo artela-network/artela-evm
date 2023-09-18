@@ -1087,5 +1087,5 @@ func (u *userOpSender) Run(input []byte) ([]byte, error) {
 	userOpHash.SetBytes(input)
 
 	aspectId := inherent.Get().SenderAspect(userOpHash)
-	return aspectId.Bytes(), nil
+	return aspectId.Hash().Bytes(), nil
 }
