@@ -237,8 +237,9 @@ func (evm *EVM) Call(caller vm.ContractRef, addr common.Address, input []byte, g
 	}
 	aspectRes := djpm.AspectInstance().PreContractCall(txAspect)
 	if hasErr, err := aspectRes.HasErr(); hasErr {
-		return nil, gas, err
+		return nil, aspectRes.GasInfo.Gas, err
 	}
+	gas = aspectRes.GasInfo.Gas
 
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
@@ -313,10 +314,10 @@ func (evm *EVM) Call(caller vm.ContractRef, addr common.Address, input []byte, g
 	}
 	aspectRes = djpm.AspectInstance().PostContractCall(retAspect)
 	if hasErr, postErr := aspectRes.HasErr(); hasErr {
-		return ret, gas, postErr
+		return ret, aspectRes.GasInfo.Gas, postErr
 	}
 
-	return ret, gas, err
+	return ret, aspectRes.GasInfo.Gas, err
 }
 
 // CallCode executes the contract associated with the addr with the given input
