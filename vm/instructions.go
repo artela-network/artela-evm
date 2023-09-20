@@ -1062,7 +1062,8 @@ func opValueIndexValueStorageJournal(pc *uint64, interpreter *EVMInterpreter, sc
 	typeId := scope.Stack.pop()
 	parentTypeId := scope.Stack.pop()
 
-	err := interpreter.tracer.SaveStateKey(scope.Contract.Address(), &base, &storageSlot, &offset, typeId.Bytes32(), parentTypeId.Bytes32(), keyValue.Bytes())
+	key := keyValue.Bytes32()
+	err := interpreter.tracer.SaveStateKey(scope.Contract.Address(), &base, &storageSlot, &offset, typeId.Bytes32(), parentTypeId.Bytes32(), key[:])
 	return nil, err
 }
 
@@ -1091,7 +1092,8 @@ func opValueIndexReferenceStorageJournal(pc *uint64, interpreter *EVMInterpreter
 	typeId := scope.Stack.pop()
 	parentTypeId := scope.Stack.pop()
 
-	err := interpreter.tracer.SaveStateKey(scope.Contract.Address(), &base, &storageSlot, nil, typeId.Bytes32(), parentTypeId.Bytes32(), keyValue.Bytes())
+	key := keyValue.Bytes32()
+	err := interpreter.tracer.SaveStateKey(scope.Contract.Address(), &base, &storageSlot, nil, typeId.Bytes32(), parentTypeId.Bytes32(), key[:])
 	return nil, err
 }
 

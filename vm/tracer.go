@@ -8,6 +8,14 @@ import (
 	"math/big"
 )
 
+type NodeType int
+
+const (
+	RootNode NodeType = iota
+	BranchNode
+	DataNode
+)
+
 // StorageChanges contains the state changes of a storage slot
 type StorageChanges struct {
 	changes map[uint64][][]byte
@@ -45,6 +53,7 @@ type StorageKey struct {
 	changes       *StorageChanges
 	data          []byte
 	typeId        common.Hash
+	nodeType      NodeType
 }
 
 // NewBranchKey creates a new instance of branch storage key,
@@ -58,6 +67,7 @@ func NewBranchKey(slot *uint256.Int, offset uint8, typeId common.Hash, data []by
 		typeId:        typeId,
 		children:      make(map[uint256.Int]map[uint8]*StorageKey),
 		childrenIndex: make(map[string]*StorageKey),
+		nodeType:      BranchNode,
 	}
 }
 
@@ -69,7 +79,35 @@ func NewRootKey() *StorageKey {
 	return &StorageKey{
 		children:      make(map[uint256.Int]map[uint8]*StorageKey),
 		childrenIndex: make(map[string]*StorageKey),
+		nodeType:      RootNode,
 	}
+}
+
+// Children returns the children of the storage key
+func (k *StorageKey) Children() []*StorageKey {
+	res := make([]*StorageKey, 0, len(k.childrenIndex))
+	if len(k.childrenIndex) > 0 {
+		for _, child := range k.childrenIndex {
+			res = append(res, child)
+		}
+	}
+	return res
+}
+
+// ChildrenIndices returns the indices of the children of the storage key
+func (k *StorageKey) ChildrenIndices() [][]byte {
+	res := make([][]byte, 0, len(k.childrenIndex))
+	if len(k.childrenIndex) > 0 {
+		for index := range k.childrenIndex {
+			res = append(res, []byte(index))
+		}
+	}
+	return res
+}
+
+// NodeType returns the node type of the storage key
+func (k *StorageKey) NodeType() NodeType {
+	return k.nodeType
 }
 
 // Slot returns the slot of the storage key
@@ -103,9 +141,16 @@ func (k *StorageKey) AddChild(child *StorageKey) (*StorageKey, error) {
 	return existing, nil
 }
 
+func (k *StorageKey) Changes() *StorageChanges {
+	return k.changes
+}
+
 // JournalChanges saves the changes of current storage key
 func (k *StorageKey) JournalChanges(callIdx uint64, newVal []byte) {
 	if k.changes == nil {
+		if k.nodeType != RootNode {
+			k.nodeType = DataNode
+		}
 		k.changes = newStorageChange()
 	}
 
@@ -253,8 +298,8 @@ func (s *StateChanges) Balance(account common.Address) *StorageChanges {
 	return s.roots[account].changes
 }
 
-// findKeyIndices finds a storage key from the index table by indices
-func (s *StateChanges) findKeyIndices(account common.Address, stateVarName string, indices ...[]byte) *StorageKey {
+// FindKeyIndices finds a storage key from the index table by indices
+func (s *StateChanges) FindKeyIndices(account common.Address, stateVarName string, indices ...[]byte) *StorageKey {
 	rootKey, ok := s.roots[account]
 	if !ok {
 		return nil
@@ -277,7 +322,7 @@ func (s *StateChanges) findKeyIndices(account common.Address, stateVarName strin
 
 // Variable looks up state changes by variable name
 func (s *StateChanges) Variable(account common.Address, stateVarName string, indices ...[]byte) *StorageChanges {
-	key := s.findKeyIndices(account, stateVarName, indices...)
+	key := s.FindKeyIndices(account, stateVarName, indices...)
 	if key == nil {
 		return nil
 	}
@@ -310,7 +355,7 @@ func (s *StateChanges) Slot(account common.Address, slot, offset *uint256.Int, t
 
 // IndicesOfChanges returns a collection of the change indices
 func (s *StateChanges) IndicesOfChanges(account common.Address, stateVarName string, indices ...[]byte) [][]byte {
-	key := s.findKeyIndices(account, stateVarName, indices...)
+	key := s.FindKeyIndices(account, stateVarName, indices...)
 	if key == nil {
 		return nil
 	}
