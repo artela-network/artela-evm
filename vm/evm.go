@@ -17,7 +17,6 @@
 package vm
 
 import (
-	"fmt"
 	"github.com/artela-network/artelasdk/djpm"
 	"github.com/artela-network/artelasdk/integration"
 	"github.com/artela-network/artelasdk/types"
@@ -236,7 +235,6 @@ func (evm *EVM) Call(caller vm.ContractRef, addr common.Address, input []byte, g
 		CurrInnerTx: inner,
 		GasInfo:     &types.GasInfo{Gas: gas},
 	}
-	fmt.Println("PreContractCall   " + inner.From + " " + inner.To)
 	aspectRes := djpm.AspectInstance().PreContractCall(txAspect)
 	if hasErr, err := aspectRes.HasErr(); hasErr {
 		return nil, aspectRes.GasInfo.Gas, err
@@ -314,7 +312,6 @@ func (evm *EVM) Call(caller vm.ContractRef, addr common.Address, input []byte, g
 		CurrInnerTx: retInnerTx,
 		GasInfo:     &types.GasInfo{Gas: gas},
 	}
-	fmt.Println("PostContractCall   " + retInnerTx.From + " " + retInnerTx.To)
 
 	aspectRes = djpm.AspectInstance().PostContractCall(retAspect)
 	if hasErr, postErr := aspectRes.HasErr(); hasErr {
