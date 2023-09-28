@@ -1060,11 +1060,9 @@ func (c *context) Run(input []byte) ([]byte, error) {
 	if input == nil || len(input) < 40 {
 		return nil, nil
 	}
-
 	aspectId := common.BytesToAddress(input[:20])
-	contractAddr := common.BytesToAddress(input[20:40])
-	key := string(input[40:])
-	value := types.GetAspectContext(contractAddr.Hex(), aspectId.Hex(), key)
+	key := string(input[20:])
+	value := types.GetAspectContext(aspectId.Hex(), key)
 
 	return []byte(value), nil
 }
