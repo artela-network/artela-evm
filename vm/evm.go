@@ -222,13 +222,21 @@ func (evm *EVM) Call(caller vm.ContractRef, addr common.Address, input []byte, g
 		Value:       evm.Message.Value().String(),
 		ChainId:     evm.chainRules.ChainID.String(),
 	}
+
+	currentCall := tracer.CallTree().Current()
+	parentIndex := int64(-1)
+	if currentCall != nil && currentCall.Parent != nil {
+		parentIndex = int64(currentCall.Parent.Index)
+	}
+
 	inner := &types.EthStackTransaction{
-		From:  caller.Address().Hex(),
-		To:    addr.Hex(),
-		Data:  input,
-		Value: value.String(),
-		Gas:   new(big.Int).SetUint64(gas).String(),
-		Index: tracer.CurrentCallIndex(),
+		From:        caller.Address().Hex(),
+		To:          addr.Hex(),
+		Data:        input,
+		Value:       value.String(),
+		Gas:         new(big.Int).SetUint64(gas).String(),
+		Index:       tracer.CurrentCallIndex(),
+		ParentIndex: parentIndex,
 	}
 	txAspect := &types.EthTxAspect{
 		Tx:          tx,
@@ -294,22 +302,12 @@ func (evm *EVM) Call(caller vm.ContractRef, addr common.Address, input []byte, g
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
 
-	innerTxIndex := tracer.CurrentCallIndex()
-	parentIndex := types.Ternary(tracer.callTree.current != nil && tracer.callTree.current.Parent != nil, func() uint64 { return tracer.callTree.current.Parent.Index }, 0)
-	retInnerTx := &types.EthStackTransaction{
-		From:        caller.Address().Hex(),
-		To:          addr.Hex(),
-		Data:        input,
-		Value:       value.String(),
-		Gas:         new(big.Int).SetUint64(gas).String(),
-		Index:       innerTxIndex,
-		Ret:         ret,
-		LeftOverGas: gas,
-		ParentIndex: parentIndex,
-	}
+	inner.LeftOverGas = gas
+	inner.Ret = ret
+
 	retAspect := &types.EthTxAspect{
 		Tx:          tx,
-		CurrInnerTx: retInnerTx,
+		CurrInnerTx: inner,
 		GasInfo:     &types.GasInfo{Gas: gas},
 	}
 
