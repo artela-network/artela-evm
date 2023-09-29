@@ -3,7 +3,7 @@ module github.com/artela-network/evm
 go 1.20
 
 require (
-	github.com/artela-network/artelasdk v0.3.1-alpha
+	github.com/artela-network/artelasdk v0.3.2-beta
 	github.com/ethereum/go-ethereum v1.11.6
 	github.com/holiman/uint256 v1.2.2
 	golang.org/x/crypto v0.9.0
@@ -12,7 +12,7 @@ require (
 require (
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
 	github.com/VictoriaMetrics/fastcache v1.6.0 // indirect
-	github.com/artela-network/runtime v0.3.1-alpha // indirect
+	github.com/artela-network/runtime v0.3.2-beta // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
 	github.com/bytecodealliance/wasmtime-go/v9 v9.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
@@ -59,7 +59,3 @@ require (
 
 replace github.com/ethereum/go-ethereum => github.com/ethereum/go-ethereum v1.10.26
 
-replace (
-	github.com/artela-network/artelasdk => ../artelasdk
-	github.com/artela-network/runtime => ../runtime
-)
