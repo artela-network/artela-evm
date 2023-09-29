@@ -207,12 +207,16 @@ const (
 	LOG4
 )
 
-// 0xe0 range - monitor related ops
+// 0xe0 range - tracer related ops
 const (
-	RJOURNAL3 OpCode = 0xe0 + iota
-	RJOURNAL5
-	VJOURNAL5
-	VJOURNAL7
+	RSVJNAL OpCode = 0xe0 + iota
+	VSVJNAL
+	IRVVJNAL
+	IRVRJNAL
+	IVVVJNAL
+	IVVRJNAL
+	VVJNAL
+	VRJNAL
 )
 
 // 0xf0 range - closures.
@@ -384,6 +388,16 @@ var opCodeToString = map[OpCode]string{
 	LOG3:   "LOG3",
 	LOG4:   "LOG4",
 
+	// 0xe0 range.
+	RSVJNAL:  "RSVJNAL",
+	VSVJNAL:  "VSVJNAL",
+	IRVVJNAL: "IRVVJNAL",
+	IRVRJNAL: "IRVRJNAL",
+	IVVVJNAL: "IVVVJNAL",
+	IVVRJNAL: "IVVRJNAL",
+	VVJNAL:   "VVJNAL",
+	VRJNAL:   "VRJNAL",
+
 	// 0xf0 range.
 	CREATE:       "CREATE",
 	CALL:         "CALL",
@@ -543,6 +557,14 @@ var stringToOp = map[string]OpCode{
 	"LOG2":           LOG2,
 	"LOG3":           LOG3,
 	"LOG4":           LOG4,
+	"RSVJNAL":        RSVJNAL,
+	"VSVJNAL":        VSVJNAL,
+	"IRVVJNAL":       IRVVJNAL,
+	"IRVRJNAL":       IRVRJNAL,
+	"IVVVJNAL":       IVVVJNAL,
+	"IVVRJNAL":       IVVRJNAL,
+	"VVJNAL":         VVJNAL,
+	"VRJNAL":         VRJNAL,
 	"CREATE":         CREATE,
 	"CREATE2":        CREATE2,
 	"CALL":           CALL,

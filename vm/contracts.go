@@ -20,6 +20,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	inherent "github.com/artela-network/artelasdk/chaincoreext/jit_inherent"
+	"github.com/artela-network/artelasdk/types"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -79,15 +81,17 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 // PrecompiledContractsBerlin contains the default set of pre-compiled Ethereum
 // contracts used in the Berlin release.
 var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}): &blake2F{},
+	common.BytesToAddress([]byte{1}):   &ecrecover{},
+	common.BytesToAddress([]byte{2}):   &sha256hash{},
+	common.BytesToAddress([]byte{3}):   &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):   &dataCopy{},
+	common.BytesToAddress([]byte{5}):   &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):   &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):   &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):   &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):   &blake2F{},
+	common.BytesToAddress([]byte{100}): &context{},
+	common.BytesToAddress([]byte{101}): &userOpSender{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -1041,4 +1045,45 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 
 	// Encode the G2 point to 256 bytes
 	return g.EncodePoint(r), nil
+}
+
+// CONTEXT implemented aspect context query as a native contract.
+type context struct {
+}
+
+func (c *context) RequiredGas(input []byte) uint64 {
+	// TODO: refactor this later
+	return 5000
+}
+
+func (c *context) Run(input []byte) ([]byte, error) {
+	if input == nil || len(input) < 20 {
+		return nil, nil
+	}
+	aspectId := common.BytesToAddress(input[:20])
+	key := string(input[20:])
+	value := types.GetAspectContext(aspectId.Hex(), key)
+
+	return []byte(value), nil
+}
+
+// userOpSender implemented user operation sender aspect query for solidity.
+type userOpSender struct {
+}
+
+func (u *userOpSender) RequiredGas(input []byte) uint64 {
+	// TODO: refactor this later
+	return 5000
+}
+
+func (u *userOpSender) Run(input []byte) ([]byte, error) {
+	if input == nil || len(input) == 0 {
+		return nil, nil
+	}
+
+	var userOpHash common.Hash
+	userOpHash.SetBytes(input)
+
+	aspectId := inherent.Get().SenderAspect(userOpHash)
+	return aspectId.Hash().Bytes(), nil
 }

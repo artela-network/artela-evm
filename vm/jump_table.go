@@ -995,33 +995,53 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:   maxStack(6, 0),
 			memorySize: memoryLog,
 		},
-		VJOURNAL5: {
-			execute:    makeValueJournal(5),
-			dynamicGas: makeGasJournal(5),
-			minStack:   minStack(5, 0),
-			maxStack:   maxStack(5, 0),
-			memorySize: makeMemoryJournal(5),
-		},
-		VJOURNAL7: {
-			execute:    makeValueJournal(7),
-			dynamicGas: makeGasJournal(7),
-			minStack:   minStack(7, 0),
-			maxStack:   maxStack(7, 0),
-			memorySize: makeMemoryJournal(7),
-		},
-		RJOURNAL3: {
-			execute:    makeReferenceJournal(3),
+		RSVJNAL: {
+			execute:    opReferenceStateVarJournal,
 			dynamicGas: makeGasJournal(3),
 			minStack:   minStack(3, 0),
 			maxStack:   maxStack(3, 0),
-			memorySize: makeMemoryJournal(3),
 		},
-		RJOURNAL5: {
-			execute:    makeReferenceJournal(5),
+		VSVJNAL: {
+			execute:    opValueStateVarJournal,
+			dynamicGas: makeGasJournal(4),
+			minStack:   minStack(4, 0),
+			maxStack:   maxStack(4, 0),
+		},
+		IRVVJNAL: {
+			execute:    opReferenceIndexValueStorageJournal,
+			dynamicGas: makeGasJournal(6),
+			minStack:   minStack(6, 0),
+			maxStack:   maxStack(6, 0),
+		},
+		IRVRJNAL: {
+			execute:    opReferenceIndexReferenceStorageJournal,
 			dynamicGas: makeGasJournal(5),
 			minStack:   minStack(5, 0),
 			maxStack:   maxStack(5, 0),
-			memorySize: makeMemoryJournal(5),
+		},
+		IVVVJNAL: {
+			execute:    opValueIndexValueStorageJournal,
+			dynamicGas: makeGasJournal(6),
+			minStack:   minStack(6, 0),
+			maxStack:   maxStack(6, 0),
+		},
+		IVVRJNAL: {
+			execute:    opValueIndexReferenceStorageJournal,
+			dynamicGas: makeGasJournal(5),
+			minStack:   minStack(5, 0),
+			maxStack:   maxStack(5, 0),
+		},
+		VVJNAL: {
+			execute:    opValueChangeJournal,
+			dynamicGas: makeGasJournal(4),
+			minStack:   minStack(4, 0),
+			maxStack:   maxStack(4, 0),
+		},
+		VRJNAL: {
+			execute:    opReferenceChangeJournal,
+			dynamicGas: makeGasJournal(2),
+			minStack:   minStack(2, 0),
+			maxStack:   maxStack(2, 0),
 		},
 		CREATE: {
 			execute:     opCreate,
