@@ -1057,7 +1057,7 @@ func (c *context) RequiredGas(input []byte) uint64 {
 }
 
 func (c *context) Run(input []byte) ([]byte, error) {
-	if input == nil || len(input) < 40 {
+	if input == nil || len(input) < 20 {
 		return nil, nil
 	}
 	aspectId := common.BytesToAddress(input[:20])
