@@ -18,12 +18,13 @@ package runtime
 
 import (
 	"fmt"
+	"github.com/artela-network/evm/tracers"
 	"math/big"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/artela-network/evm/logger"
+	"github.com/artela-network/evm/tracers/logger"
 	"github.com/artela-network/evm/vm"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -33,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
 
 	// force-load js tracers to trigger registration
@@ -831,7 +831,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 				GasLimit: 1000000,
 				State:    statedb,
 				EVMConfig: vm.Config{
-					Tracer: nil,
+					Tracer: tracer,
 				}})
 			if err != nil {
 				t.Fatal("didn't expect error", err)
@@ -865,7 +865,7 @@ func TestJSTracerCreateTx(t *testing.T) {
 	_, _, _, err = Create(code, &Config{
 		State: statedb,
 		EVMConfig: vm.Config{
-			Tracer: nil,
+			Tracer: tracer,
 		}})
 	if err != nil {
 		t.Fatal(err)
