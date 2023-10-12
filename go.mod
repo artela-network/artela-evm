@@ -3,7 +3,7 @@ module github.com/artela-network/evm
 go 1.20
 
 require (
-	github.com/artela-network/artelasdk v0.3.2-beta
+	github.com/artela-network/artelasdk v0.3.3-beta
 	github.com/ethereum/go-ethereum v1.11.6
 	github.com/holiman/uint256 v1.2.2
 	golang.org/x/crypto v0.9.0
@@ -58,4 +58,3 @@ require (
 )
 
 replace github.com/ethereum/go-ethereum => github.com/ethereum/go-ethereum v1.10.26
-
