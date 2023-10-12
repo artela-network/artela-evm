@@ -245,6 +245,15 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
+	if cp, ok := p.(ContextfulPrecompiledContract); ok {
+		p = cp.CloneWithCtx(&ExecutionContext{
+			from:  caller.Address(),
+			to:    addr,
+			gas:   gas,
+			value: value,
+		})
+	}
+
 	debug := evm.Config.Tracer != nil
 
 	if !evm.StateDB.Exist(addr) {

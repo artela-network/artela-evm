@@ -22,6 +22,7 @@ import (
 	"errors"
 	inherent "github.com/artela-network/artelasdk/chaincoreext/jit_inherent"
 	"github.com/artela-network/artelasdk/types"
+	"github.com/holiman/uint256"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -40,6 +41,19 @@ import (
 type PrecompiledContract interface {
 	RequiredGas(input []byte) uint64  // RequiredPrice calculates the contract gas use
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
+}
+
+type ContextfulPrecompiledContract interface {
+	RequiredGas(input []byte) uint64  // RequiredPrice calculates the contract gas use
+	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
+	CloneWithCtx(ctx *ExecutionContext) ContextfulPrecompiledContract
+}
+
+type ExecutionContext struct {
+	from  common.Address
+	to    common.Address
+	gas   uint64
+	value *big.Int
 }
 
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
@@ -92,6 +106,7 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{9}):   &blake2F{},
 	common.BytesToAddress([]byte{100}): &context{},
 	common.BytesToAddress([]byte{101}): &userOpSender{},
+	common.BytesToAddress([]byte{102}): &contextWriter{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -1092,4 +1107,62 @@ func (u *userOpSender) Run(input []byte) ([]byte, error) {
 
 	aspectId := inherent.Get().SenderAspect(userOpHash)
 	return aspectId.Hash().Bytes(), nil
+}
+
+// contextWriter implemented aspect context update as a native contract.
+type contextWriter struct {
+	ctx *ExecutionContext
+}
+
+func (c *contextWriter) CloneWithCtx(ctx *ExecutionContext) ContextfulPrecompiledContract {
+	return &contextWriter{ctx: ctx}
+}
+
+func (c *contextWriter) RequiredGas(input []byte) uint64 {
+	// TODO: refactor this later
+	return 5000
+}
+
+func (c *contextWriter) Run(input []byte) ([]byte, error) {
+	if input == nil || len(input) < 128 {
+		return nil, nil
+	}
+
+	key, err := c.loadParamString(input, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	value, err := c.loadParamString(input, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	types.SetAspectContext(c.ctx.from.Hex(), key, value)
+
+	return nil, nil
+}
+
+func (c *contextWriter) loadParamString(input []byte, index int) (string, error) {
+	dataOffset, overflow := uint256.NewInt(0).SetBytes32(input[index*32 : (index+1)*32]).Uint64WithOverflow()
+	if overflow {
+		return "", errors.New("invalid offset")
+	}
+
+	start := dataOffset + 32
+	if start > uint64(len(input)) {
+		return "", errors.New("invalid param length")
+	}
+
+	dataLen, overflow := uint256.NewInt(0).SetBytes32(input[dataOffset:start]).Uint64WithOverflow()
+	if overflow {
+		return "", errors.New("invalid length")
+	}
+
+	end := start + dataLen
+	if end > uint64(len(input)) {
+		return "", errors.New("invalid param length")
+	}
+
+	return string(input[start:end]), nil
 }
