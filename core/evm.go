@@ -75,7 +75,7 @@ func NewEVMTxContext(msg *ethcore.Message) vm.TxContext {
 	return vm.TxContext{
 		Origin:   msg.From,
 		GasPrice: new(big.Int).Set(msg.GasPrice),
-		Msg:      msg,
+		Message:  msg,
 	}
 }
 

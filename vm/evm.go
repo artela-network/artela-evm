@@ -18,9 +18,11 @@ package vm
 
 import (
 	"github.com/artela-network/artelasdk/djpm"
+	"github.com/artela-network/artelasdk/integration"
 	"github.com/artela-network/artelasdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	ethvm "github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -87,7 +89,51 @@ type TxContext struct {
 	GasPrice *big.Int       // Provides information for GASPRICE
 
 	// Original message info
-	Msg *core.Message
+	Message *core.Message
+}
+
+type wrappedMessage struct {
+	core.Message
+}
+
+func (m *wrappedMessage) From() common.Address {
+	return m.Message.From
+}
+
+func (m *wrappedMessage) To() *common.Address {
+	return m.Message.To
+}
+
+func (m *wrappedMessage) GasPrice() *big.Int {
+	return m.Message.GasPrice
+}
+
+func (m *wrappedMessage) GasFeeCap() *big.Int {
+	return m.Message.GasFeeCap
+}
+
+func (m *wrappedMessage) GasTipCap() *big.Int {
+	return m.Message.GasTipCap
+}
+
+func (m *wrappedMessage) Gas() uint64 {
+	return m.Message.GasLimit
+}
+
+func (m *wrappedMessage) Value() *big.Int {
+	return m.Message.Value
+}
+
+func (m *wrappedMessage) Nonce() uint64 {
+	return m.Message.Nonce
+}
+
+func (m *wrappedMessage) Data() []byte {
+	return m.Message.Data
+}
+
+func (t *TxContext) Msg() integration.Message {
+	return &wrappedMessage{*t.Message}
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -184,7 +230,7 @@ func (evm *EVM) Tracer() *Tracer {
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	tracer := evm.Tracer()
 	tracer.SaveCall(caller.Address(), addr, input, uint256.MustFromBig(value), uint256.NewInt(gas))
 
@@ -199,13 +245,13 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		BlockHash:   blockHash.Bytes(),
 		BlockNumber: int64(blockNum),
 		From:        evm.Origin.Hex(),
-		Gas:         evm.Msg.GasLimit,
+		Gas:         evm.Message.GasLimit,
 		GasPrice:    evm.GasPrice.String(),
-		GasFeeCap:   evm.Msg.GasFeeCap.String(),
-		GasTipCap:   evm.Msg.GasTipCap.String(),
-		Input:       evm.Msg.Data,
-		To:          evm.Msg.To.Hex(),
-		Value:       evm.Msg.Value.String(),
+		GasFeeCap:   evm.Message.GasFeeCap.String(),
+		GasTipCap:   evm.Message.GasTipCap.String(),
+		Input:       evm.Message.Data,
+		To:          evm.Message.To.Hex(),
+		Value:       evm.Message.Value.String(),
 		ChainId:     evm.chainRules.ChainID.String(),
 	}
 
