@@ -17,12 +17,12 @@
 package core
 
 import (
-	"github.com/artela-network/evm/vm"
+	ethcore "github.com/ethereum/go-ethereum/core"
 	"math/big"
 
+	"github.com/artela-network/evm/vm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -62,7 +62,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		GetHash:     GetHashFn(header, chain),
 		Coinbase:    beneficiary,
 		BlockNumber: new(big.Int).Set(header.Number),
-		Time:        new(big.Int).SetUint64(header.Time),
+		Time:        header.Time,
 		Difficulty:  new(big.Int).Set(header.Difficulty),
 		BaseFee:     baseFee,
 		GasLimit:    header.GasLimit,
@@ -71,10 +71,10 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 }
 
 // NewEVMTxContext creates a new transaction context for a single transaction.
-func NewEVMTxContext(msg core.Message) vm.TxContext {
+func NewEVMTxContext(msg *ethcore.Message) vm.TxContext {
 	return vm.TxContext{
-		Origin:   msg.From(),
-		GasPrice: new(big.Int).Set(msg.GasPrice()),
+		Origin:   msg.From,
+		GasPrice: new(big.Int).Set(msg.GasPrice),
 		Message:  msg,
 	}
 }
@@ -122,7 +122,8 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 // This does not take the necessary gas in to account to make the transfer valid.
 func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 	if addr.String() == "0x0000000000000000000000000000000000A27E14" {
-		//do artela mock
+		// FIXME: skip fee charging for any aspect related operations,
+		//        will fix this after the proper gas instruments gets implemented in artwasm
 		return true
 	}
 	return db.GetBalance(addr).Cmp(amount) >= 0

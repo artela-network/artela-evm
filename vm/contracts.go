@@ -22,6 +22,7 @@ import (
 	"errors"
 	inherent "github.com/artela-network/artelasdk/chaincoreext/jit_inherent"
 	"github.com/artela-network/artelasdk/types"
+	"github.com/holiman/uint256"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -40,6 +41,19 @@ import (
 type PrecompiledContract interface {
 	RequiredGas(input []byte) uint64  // RequiredPrice calculates the contract gas use
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
+}
+
+type ContextfulPrecompiledContract interface {
+	RequiredGas(input []byte) uint64  // RequiredPrice calculates the contract gas use
+	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
+	CloneWithCtx(ctx *ExecutionContext) ContextfulPrecompiledContract
+}
+
+type ExecutionContext struct {
+	from  common.Address
+	to    common.Address
+	gas   uint64
+	value *big.Int
 }
 
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
@@ -92,6 +106,7 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{9}):   &blake2F{},
 	common.BytesToAddress([]byte{100}): &context{},
 	common.BytesToAddress([]byte{101}): &userOpSender{},
+	common.BytesToAddress([]byte{102}): &contextWriter{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -239,7 +254,7 @@ func (c *dataCopy) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.IdentityPerWordGas + params.IdentityBaseGas
 }
 func (c *dataCopy) Run(in []byte) ([]byte, error) {
-	return in, nil
+	return common.CopyBytes(in), nil
 }
 
 // bigModExp implements a native big integer exponential modular operation.
@@ -267,11 +282,10 @@ var (
 
 // modexpMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
 //
-// def mult_complexity(x):
-//
-//	if x <= 64: return x ** 2
-//	elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
-//	else: return x ** 2 // 16 + 480 * x - 199680
+//	def mult_complexity(x):
+//		if x <= 64: return x ** 2
+//		elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
+//		else: return x ** 2 // 16 + 480 * x - 199680
 //
 // where is x is max(length_of_MODULUS, length_of_BASE)
 func modexpMultComplexity(x *big.Int) *big.Int {
@@ -385,12 +399,19 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 		base = new(big.Int).SetBytes(getData(input, 0, baseLen))
 		exp  = new(big.Int).SetBytes(getData(input, baseLen, expLen))
 		mod  = new(big.Int).SetBytes(getData(input, baseLen+expLen, modLen))
+		v    []byte
 	)
-	if mod.BitLen() == 0 {
+	switch {
+	case mod.BitLen() == 0:
 		// Modulo 0 is undefined, return zero
 		return common.LeftPadBytes([]byte{}, int(modLen)), nil
+	case base.BitLen() == 1: // a bit length of 1 means it's 1 (or -1).
+		//If base == 1, then we can just return base % mod (if mod >= 1, which it is)
+		v = base.Mod(base, mod).Bytes()
+	default:
+		v = base.Exp(base, exp, mod).Bytes()
 	}
-	return common.LeftPadBytes(base.Exp(base, exp, mod).Bytes(), int(modLen)), nil
+	return common.LeftPadBytes(v, int(modLen)), nil
 }
 
 // newCurvePoint unmarshals a binary blob into a bn256 elliptic curve point,
@@ -940,7 +961,7 @@ func (c *bls12381Pairing) Run(input []byte) ([]byte, error) {
 			return nil, errBLS12381G2PointSubgroup
 		}
 
-		// Update pairing engine with G1 and G2 ponits
+		// Update pairing engine with G1 and G2 points
 		e.AddPair(p1, p2)
 	}
 	// Prepare 32 byte output
@@ -1086,4 +1107,62 @@ func (u *userOpSender) Run(input []byte) ([]byte, error) {
 
 	aspectId := inherent.Get().SenderAspect(userOpHash)
 	return aspectId.Hash().Bytes(), nil
+}
+
+// contextWriter implemented aspect context update as a native contract.
+type contextWriter struct {
+	ctx *ExecutionContext
+}
+
+func (c *contextWriter) CloneWithCtx(ctx *ExecutionContext) ContextfulPrecompiledContract {
+	return &contextWriter{ctx: ctx}
+}
+
+func (c *contextWriter) RequiredGas(input []byte) uint64 {
+	// TODO: refactor this later
+	return 5000
+}
+
+func (c *contextWriter) Run(input []byte) ([]byte, error) {
+	if input == nil || len(input) < 128 {
+		return nil, nil
+	}
+
+	key, err := c.loadParamString(input, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	value, err := c.loadParamString(input, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	types.SetAspectContext(c.ctx.from.Hex(), key, value)
+
+	return nil, nil
+}
+
+func (c *contextWriter) loadParamString(input []byte, index int) (string, error) {
+	dataOffset, overflow := uint256.NewInt(0).SetBytes32(input[index*32 : (index+1)*32]).Uint64WithOverflow()
+	if overflow {
+		return "", errors.New("invalid offset")
+	}
+
+	start := dataOffset + 32
+	if start > uint64(len(input)) {
+		return "", errors.New("invalid param length")
+	}
+
+	dataLen, overflow := uint256.NewInt(0).SetBytes32(input[dataOffset:start]).Uint64WithOverflow()
+	if overflow {
+		return "", errors.New("invalid length")
+	}
+
+	end := start + dataLen
+	if end > uint64(len(input)) {
+		return "", errors.New("invalid param length")
+	}
+
+	return string(input[start:end]), nil
 }
