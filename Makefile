@@ -35,5 +35,5 @@ format:
 	$(golangci_lint_cmd) run --fix
 .PHONY: format
 
-test:
-	go test
+test-unit:
+	go test -v ./... -short

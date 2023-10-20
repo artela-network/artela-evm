@@ -239,49 +239,67 @@ func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte
 	defer func() {
 		tracer.ExitCall(leftOverGas, ret)
 	}()
-
+	inner := &types.EthStackTransaction{}
+	tx := &types.EthTransaction{}
 	blockNum := evm.Context.BlockNumber.Uint64()
 	blockHash := evm.Context.GetHash(blockNum)
-	tx := &types.EthTransaction{
-		BlockHash:   blockHash.Bytes(),
-		BlockNumber: int64(blockNum),
-		From:        evm.Origin.Hex(),
-		Gas:         evm.Message.GasLimit,
-		GasPrice:    evm.GasPrice.String(),
-		GasFeeCap:   evm.Message.GasFeeCap.String(),
-		GasTipCap:   evm.Message.GasTipCap.String(),
-		Input:       evm.Message.Data,
-		To:          evm.Message.To.Hex(),
-		Value:       evm.Message.Value.String(),
-		ChainId:     evm.chainRules.ChainID.String(),
-	}
+	if evm.Message != nil {
+		tx := &types.EthTransaction{
+			BlockHash:   blockHash.Bytes(),
+			BlockNumber: int64(blockNum),
+			From:        evm.Origin.Hex(),
+			Gas: types.Ternary(evm.Message.GasLimit > 0, func() uint64 {
+				return evm.Message.GasLimit
+			}, 0),
+			GasPrice: types.Ternary(evm.Message.GasPrice != nil, func() string {
+				return evm.Message.GasPrice.String()
+			}, ""),
+			GasFeeCap: types.Ternary(evm.Message.GasFeeCap != nil, func() string {
+				return evm.Message.GasFeeCap.String()
+			}, ""),
+			GasTipCap: types.Ternary(evm.Message.GasTipCap != nil, func() string {
+				return evm.Message.GasTipCap.String()
+			}, ""),
+			Input: types.Ternary(len(evm.Message.Data) > 0, func() []byte {
+				return evm.Message.Data
+			}, []byte{}),
+			To: types.Ternary(evm.Message.To != nil, func() string {
+				return evm.Message.To.Hex()
+			}, ""),
+			Value: types.Ternary(evm.Message.Value != nil, func() string {
+				return evm.Message.Value.String()
+			}, ""),
+			ChainId: types.Ternary(evm.chainRules.ChainID != nil, func() string {
+				return evm.chainRules.ChainID.String()
+			}, ""),
+		}
 
-	currentCall := tracer.CallTree().Current()
-	parentIndex := int64(-1)
-	if currentCall != nil && currentCall.Parent != nil {
-		parentIndex = int64(currentCall.Parent.Index)
-	}
+		currentCall := tracer.CallTree().Current()
+		parentIndex := int64(-1)
+		if currentCall != nil && currentCall.Parent != nil {
+			parentIndex = int64(currentCall.Parent.Index)
+		}
 
-	inner := &types.EthStackTransaction{
-		From:        caller.Address().Hex(),
-		To:          addr.Hex(),
-		Data:        input,
-		Value:       value.String(),
-		Gas:         new(big.Int).SetUint64(gas).String(),
-		Index:       tracer.CurrentCallIndex(),
-		ParentIndex: parentIndex,
+		inner := &types.EthStackTransaction{
+			From:        caller.Address().Hex(),
+			To:          addr.Hex(),
+			Data:        input,
+			Value:       value.String(),
+			Gas:         new(big.Int).SetUint64(gas).String(),
+			Index:       tracer.CurrentCallIndex(),
+			ParentIndex: parentIndex,
+		}
+		txAspect := &types.EthTxAspect{
+			Tx:          tx,
+			CurrInnerTx: inner,
+			GasInfo:     &types.GasInfo{Gas: gas},
+		}
+		aspectRes := djpm.AspectInstance().PreContractCall(txAspect)
+		if hasErr, err := aspectRes.HasErr(); hasErr {
+			return nil, aspectRes.GasInfo.Gas, err
+		}
+		gas = aspectRes.GasInfo.Gas
 	}
-	txAspect := &types.EthTxAspect{
-		Tx:          tx,
-		CurrInnerTx: inner,
-		GasInfo:     &types.GasInfo{Gas: gas},
-	}
-	aspectRes := djpm.AspectInstance().PreContractCall(txAspect)
-	if hasErr, err := aspectRes.HasErr(); hasErr {
-		return nil, aspectRes.GasInfo.Gas, err
-	}
-	gas = aspectRes.GasInfo.Gas
-
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -366,25 +384,28 @@ func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte
 			gas = 0
 		}
 		// TODO: consider clearing up unused snapshots:
-		//} else {
+		// } else {
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
 
-	inner.LeftOverGas = gas
-	inner.Ret = ret
+	if evm.Message != nil {
+		inner.LeftOverGas = gas
+		inner.Ret = ret
 
-	retAspect := &types.EthTxAspect{
-		Tx:          tx,
-		CurrInnerTx: inner,
-		GasInfo:     &types.GasInfo{Gas: gas},
+		retAspect := &types.EthTxAspect{
+			Tx:          tx,
+			CurrInnerTx: inner,
+			GasInfo:     &types.GasInfo{Gas: gas},
+		}
+
+		aspectRes := djpm.AspectInstance().PostContractCall(retAspect)
+		if hasErr, postErr := aspectRes.HasErr(); hasErr {
+			return ret, aspectRes.GasInfo.Gas, postErr
+		}
+		gas = aspectRes.GasInfo.Gas
 	}
 
-	aspectRes = djpm.AspectInstance().PostContractCall(retAspect)
-	if hasErr, postErr := aspectRes.HasErr(); hasErr {
-		return ret, aspectRes.GasInfo.Gas, postErr
-	}
-
-	return ret, aspectRes.GasInfo.Gas, err
+	return ret, gas, err
 }
 
 // CallCode executes the contract associated with the addr with the given input

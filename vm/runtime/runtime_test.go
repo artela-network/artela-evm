@@ -674,6 +674,7 @@ func TestColdAccountAccessCost(t *testing.T) {
 		},
 	} {
 		tracer := logger.NewStructLogger(nil)
+		// nolint
 		Execute(tc.code, nil, &Config{
 			EVMConfig: vm.Config{
 				Tracer: tracer,
