@@ -521,6 +521,7 @@ func TestEip2929Cases(t *testing.T) {
 		fmt.Printf("%v\n\nBytecode: \n```\n%#x\n```\nOperations: \n```\n%v\n```\n\n",
 			comment,
 			code, ops)
+		// nolint
 		Execute(code, nil, &Config{
 			EVMConfig: vm.Config{
 				Tracer:    logger.NewMarkdownLogger(nil, os.Stdout),
