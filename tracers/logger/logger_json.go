@@ -21,9 +21,10 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/artela-network/evm/vm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+
+	"github.com/artela-network/evm/vm"
 )
 
 type JSONLogger struct {
@@ -75,6 +76,7 @@ func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	if l.cfg.EnableReturnData {
 		log.ReturnData = rData
 	}
+	// nolint
 	l.encoder.Encode(log)
 }
 
@@ -89,6 +91,7 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	if err != nil {
 		errMsg = err.Error()
 	}
+	// nolint
 	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), errMsg})
 }
 

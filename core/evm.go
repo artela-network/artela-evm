@@ -17,8 +17,9 @@
 package core
 
 import (
-	ethcore "github.com/ethereum/go-ethereum/core"
 	"math/big"
+
+	ethcore "github.com/ethereum/go-ethereum/core"
 
 	"github.com/artela-network/evm/vm"
 	"github.com/ethereum/go-ethereum/common"

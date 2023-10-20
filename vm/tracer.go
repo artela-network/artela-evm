@@ -3,9 +3,10 @@ package vm
 import (
 	"bytes"
 	"errors"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
-	"math/big"
 )
 
 type NodeType int
@@ -31,7 +32,7 @@ func (c *StorageChanges) append(callIdx uint64, newVal []byte) {
 	changes, ok := c.changes[callIdx]
 	if !ok {
 		c.changes[callIdx] = make([][]byte, 0, 1)
-	} else if len(changes) > 0 && bytes.Compare(changes[len(changes)-1], newVal) == 0 {
+	} else if len(changes) > 0 && bytes.Equal(changes[len(changes)-1], newVal) {
 		// ignore identical change
 		return
 	}
