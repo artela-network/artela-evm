@@ -248,9 +248,7 @@ func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte
 			BlockHash:   blockHash.Bytes(),
 			BlockNumber: int64(blockNum),
 			From:        evm.Origin.Hex(),
-			Gas: types.Ternary(evm.Message.GasLimit > 0, func() uint64 {
-				return evm.Message.GasLimit
-			}, 0),
+			Gas:         evm.Message.GasLimit,
 			GasPrice: types.Ternary(evm.Message.GasPrice != nil, func() string {
 				return evm.Message.GasPrice.String()
 			}, ""),
@@ -260,9 +258,7 @@ func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte
 			GasTipCap: types.Ternary(evm.Message.GasTipCap != nil, func() string {
 				return evm.Message.GasTipCap.String()
 			}, ""),
-			Input: types.Ternary(len(evm.Message.Data) > 0, func() []byte {
-				return evm.Message.Data
-			}, []byte{}),
+			Input: evm.Message.Data,
 			To: types.Ternary(evm.Message.To != nil, func() string {
 				return evm.Message.To.Hex()
 			}, ""),
