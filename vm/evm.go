@@ -244,7 +244,7 @@ func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte
 	blockNum := evm.Context.BlockNumber.Uint64()
 	blockHash := evm.Context.GetHash(blockNum)
 	if evm.Message != nil {
-		tx := &types.EthTransaction{
+		tx = &types.EthTransaction{
 			BlockHash:   blockHash.Bytes(),
 			BlockNumber: int64(blockNum),
 			From:        evm.Origin.Hex(),
@@ -276,7 +276,7 @@ func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte
 			parentIndex = int64(currentCall.Parent.Index)
 		}
 
-		inner := &types.EthStackTransaction{
+		inner = &types.EthStackTransaction{
 			From:        caller.Address().Hex(),
 			To:          addr.Hex(),
 			Data:        input,
