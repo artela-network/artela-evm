@@ -20,10 +20,11 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
-	inherent "github.com/artela-network/artelasdk/chaincoreext/jit_inherent"
-	"github.com/artela-network/artelasdk/types"
-	"github.com/holiman/uint256"
 	"math/big"
+
+	inherent "github.com/artela-network/aspect-core/chaincoreext/jit_inherent"
+	"github.com/artela-network/aspect-core/types"
+	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -222,6 +223,7 @@ type sha256hash struct{}
 func (c *sha256hash) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.Sha256PerWordGas + params.Sha256BaseGas
 }
+
 func (c *sha256hash) Run(input []byte) ([]byte, error) {
 	h := sha256.Sum256(input)
 	return h[:], nil
@@ -237,6 +239,7 @@ type ripemd160hash struct{}
 func (c *ripemd160hash) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.Ripemd160PerWordGas + params.Ripemd160BaseGas
 }
+
 func (c *ripemd160hash) Run(input []byte) ([]byte, error) {
 	ripemd := ripemd160.New()
 	ripemd.Write(input)
@@ -253,6 +256,7 @@ type dataCopy struct{}
 func (c *dataCopy) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.IdentityPerWordGas + params.IdentityBaseGas
 }
+
 func (c *dataCopy) Run(in []byte) ([]byte, error) {
 	return common.CopyBytes(in), nil
 }
@@ -352,7 +356,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		// def mult_complexity(x):
 		//    ceiling(x/8)^2
 		//
-		//where is x is max(length_of_MODULUS, length_of_BASE)
+		// where is x is max(length_of_MODULUS, length_of_BASE)
 		gas = gas.Add(gas, big7)
 		gas = gas.Div(gas, big8)
 		gas.Mul(gas, gas)
@@ -406,7 +410,7 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 		// Modulo 0 is undefined, return zero
 		return common.LeftPadBytes([]byte{}, int(modLen)), nil
 	case base.BitLen() == 1: // a bit length of 1 means it's 1 (or -1).
-		//If base == 1, then we can just return base % mod (if mod >= 1, which it is)
+		// If base == 1, then we can just return base % mod (if mod >= 1, which it is)
 		v = base.Mod(base, mod).Bytes()
 	default:
 		v = base.Exp(base, exp, mod).Bytes()
@@ -775,6 +779,7 @@ func (c *bls12381G1MultiExp) Run(input []byte) ([]byte, error) {
 
 	// Compute r = e_0 * p_0 + e_1 * p_1 + ... + e_(k-1) * p_(k-1)
 	r := g.New()
+	// nolint
 	g.MultiExp(r, points, scalars)
 
 	// Encode the G1 point to 128 bytes
@@ -906,7 +911,10 @@ func (c *bls12381G2MultiExp) Run(input []byte) ([]byte, error) {
 
 	// Compute r = e_0 * p_0 + e_1 * p_1 + ... + e_(k-1) * p_(k-1)
 	r := g.New()
-	g.MultiExp(r, points, scalars)
+	_, expErr := g.MultiExp(r, points, scalars)
+	if expErr != nil {
+		return nil, expErr
+	}
 
 	// Encode the G2 point to 256 bytes.
 	return g.EncodePoint(r), nil
@@ -1069,8 +1077,7 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 }
 
 // CONTEXT implemented aspect context query as a native contract.
-type context struct {
-}
+type context struct{}
 
 func (c *context) RequiredGas(input []byte) uint64 {
 	// TODO: refactor this later
@@ -1089,8 +1096,7 @@ func (c *context) Run(input []byte) ([]byte, error) {
 }
 
 // userOpSender implemented user operation sender aspect query for solidity.
-type userOpSender struct {
-}
+type userOpSender struct{}
 
 func (u *userOpSender) RequiredGas(input []byte) uint64 {
 	// TODO: refactor this later
@@ -1098,7 +1104,7 @@ func (u *userOpSender) RequiredGas(input []byte) uint64 {
 }
 
 func (u *userOpSender) Run(input []byte) ([]byte, error) {
-	if input == nil || len(input) == 0 {
+	if len(input) == 0 {
 		return nil, nil
 	}
 

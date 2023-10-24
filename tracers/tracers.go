@@ -23,8 +23,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/artela-network/evm/vm"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/artela-network/artela-evm/vm"
 )
 
 // Context contains some contextual infos for a transaction execution that is not
@@ -45,8 +46,10 @@ type Tracer interface {
 	Stop(err error)
 }
 
-type ctorFn func(*Context, json.RawMessage) (Tracer, error)
-type jsCtorFn func(string, *Context, json.RawMessage) (Tracer, error)
+type (
+	ctorFn   func(*Context, json.RawMessage) (Tracer, error)
+	jsCtorFn func(string, *Context, json.RawMessage) (Tracer, error)
+)
 
 type elem struct {
 	ctor ctorFn

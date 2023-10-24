@@ -17,9 +17,10 @@
 package tracers
 
 import (
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"math/big"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/eth/tracers"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -84,9 +85,9 @@ func BenchmarkTransactionTrace(b *testing.B) {
 	// Create the tracer, the EVM environment and run it
 	tracer := logger.NewStructLogger(&logger.Config{
 		Debug: false,
-		//DisableStorage: true,
-		//EnableMemory: false,
-		//EnableReturnData: false,
+		// DisableStorage: true,
+		// EnableMemory: false,
+		// EnableReturnData: false,
 	})
 	evm := vm.NewEVM(context, txContext, statedb, params.AllEthashProtocolChanges, vm.Config{Tracer: tracer})
 	msg, err := core.TransactionToMessage(tx, signer, nil)

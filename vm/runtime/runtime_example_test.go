@@ -19,8 +19,9 @@ package runtime_test
 import (
 	"fmt"
 
-	"github.com/artela-network/evm/vm/runtime"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/artela-network/artela-evm/vm/runtime"
 )
 
 func ExampleExecute() {

@@ -20,13 +20,14 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/artela-network/evm/vm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+
+	"github.com/artela-network/artela-evm/vm"
 )
 
 // Config is a basic type specifying certain configuration flags for running

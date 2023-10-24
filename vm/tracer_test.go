@@ -1,14 +1,15 @@
 package vm
 
 import (
+	"math/big"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/params"
-	"math/big"
-	"testing"
 )
 
 func TestNewCommands(t *testing.T) {
@@ -43,36 +44,36 @@ func TestNewCommands(t *testing.T) {
 		SkipAccountChecks: false,
 	}
 
-	evm := NewEVM(vmctx, TxContext{Msg: message}, statedb, params.AllEthashProtocolChanges, vmConf)
+	evm := NewEVM(vmctx, TxContext{Message: message}, statedb, params.AllEthashProtocolChanges, vmConf)
 	_, address, _, err := evm.Create(AccountRef(sender), common.Hex2Bytes(byteCode), math.MaxUint64, new(big.Int))
 	if err != nil {
 		t.Error(err)
 	}
 	statedb.Finalise(true)
 
-	evm = NewEVM(vmctx, TxContext{Msg: message}, statedb, params.AllEthashProtocolChanges, vmConf)
+	evm = NewEVM(vmctx, TxContext{Message: message}, statedb, params.AllEthashProtocolChanges, vmConf)
 	_, _, err = evm.Call(AccountRef(sender), address, common.Hex2Bytes(input), math.MaxUint64, new(big.Int))
 	if err != nil {
 		t.Error(err)
 	}
 
-	//stateChanges := evm.Tracer().StateChanges()
+	// stateChanges := evm.Tracer().StateChanges()
 	//
-	//stateChange1 := stateChanges.Variable(address, "MyToken.dummy3", "")
-	//assert.Equal(t, 2, len(stateChange1), "state change not right")
+	// stateChange1 := stateChanges.Variable(address, "MyToken.dummy3", "")
+	// assert.Equal(t, 2, len(stateChange1), "state change not right")
 	//
-	//assert.True(t, new(uint256.Int).SetBytes(stateChange1[0].Value).Eq(uint256.NewInt(0)), "state 0 data not eq")
-	//assert.True(t, new(uint256.Int).SetBytes(stateChange1[1].Value).Eq(uint256.NewInt(100)), "state 1 data not eq")
+	// assert.True(t, new(uint256.Int).SetBytes(stateChange1[0].Value).Eq(uint256.NewInt(0)), "state 0 data not eq")
+	// assert.True(t, new(uint256.Int).SetBytes(stateChange1[1].Value).Eq(uint256.NewInt(100)), "state 1 data not eq")
 	//
-	//assert.True(t, bytes.Compare(stateChange1[0].Account.Bytes(), common.Address{}.Bytes()) == 0, "state 0 account not eq")
-	//assert.True(t, bytes.Compare(stateChange1[1].Account.Bytes(), sender.Bytes()) == 0, "state 1 account not eq")
+	// assert.True(t, bytes.Compare(stateChange1[0].Account.Bytes(), common.Address{}.Bytes()) == 0, "state 0 account not eq")
+	// assert.True(t, bytes.Compare(stateChange1[1].Account.Bytes(), sender.Bytes()) == 0, "state 1 account not eq")
 	//
-	//stateChange2 := stateChanges.Variable(address, "DummyDummy.dummy", "")
-	//assert.Equal(t, 2, len(stateChange2), "state change not right")
+	// stateChange2 := stateChanges.Variable(address, "DummyDummy.dummy", "")
+	// assert.Equal(t, 2, len(stateChange2), "state change not right")
 	//
-	//assert.Equal(t, "", string(stateChange2[0].Value))
-	//assert.Equal(t, "haha", string(stateChange2[1].Value))
+	// assert.Equal(t, "", string(stateChange2[0].Value))
+	// assert.Equal(t, "haha", string(stateChange2[1].Value))
 	//
-	//assert.True(t, bytes.Compare(stateChange2[0].Account.Bytes(), common.Address{}.Bytes()) == 0, "state 0 account not eq")
-	//assert.True(t, bytes.Compare(stateChange2[1].Account.Bytes(), sender.Bytes()) == 0, "state 1 account not eq")
+	// assert.True(t, bytes.Compare(stateChange2[0].Account.Bytes(), common.Address{}.Bytes()) == 0, "state 0 account not eq")
+	// assert.True(t, bytes.Compare(stateChange2[1].Account.Bytes(), sender.Bytes()) == 0, "state 1 account not eq")
 }

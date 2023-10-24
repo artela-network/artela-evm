@@ -17,17 +17,18 @@
 package vm
 
 import (
-	"github.com/artela-network/artelasdk/djpm"
-	"github.com/artela-network/artelasdk/integration"
-	"github.com/artela-network/artelasdk/types"
+	"math/big"
+	"sync/atomic"
+
+	"github.com/artela-network/aspect-core/djpm"
+	"github.com/artela-network/aspect-core/integration"
+	"github.com/artela-network/aspect-core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	ethvm "github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
-	"math/big"
-	"sync/atomic"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -238,49 +239,63 @@ func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte
 	defer func() {
 		tracer.ExitCall(leftOverGas, ret)
 	}()
-
+	inner := &types.EthStackTransaction{}
+	tx := &types.EthTransaction{}
 	blockNum := evm.Context.BlockNumber.Uint64()
 	blockHash := evm.Context.GetHash(blockNum)
-	tx := &types.EthTransaction{
-		BlockHash:   blockHash.Bytes(),
-		BlockNumber: int64(blockNum),
-		From:        evm.Origin.Hex(),
-		Gas:         evm.Message.GasLimit,
-		GasPrice:    evm.GasPrice.String(),
-		GasFeeCap:   evm.Message.GasFeeCap.String(),
-		GasTipCap:   evm.Message.GasTipCap.String(),
-		Input:       evm.Message.Data,
-		To:          evm.Message.To.Hex(),
-		Value:       evm.Message.Value.String(),
-		ChainId:     evm.chainRules.ChainID.String(),
-	}
+	if evm.Message != nil {
+		tx = &types.EthTransaction{
+			BlockHash:   blockHash.Bytes(),
+			BlockNumber: int64(blockNum),
+			From:        evm.Origin.Hex(),
+			Gas:         evm.Message.GasLimit,
+			GasPrice: types.Ternary(evm.Message.GasPrice != nil, func() string {
+				return evm.Message.GasPrice.String()
+			}, ""),
+			GasFeeCap: types.Ternary(evm.Message.GasFeeCap != nil, func() string {
+				return evm.Message.GasFeeCap.String()
+			}, ""),
+			GasTipCap: types.Ternary(evm.Message.GasTipCap != nil, func() string {
+				return evm.Message.GasTipCap.String()
+			}, ""),
+			Input: evm.Message.Data,
+			To: types.Ternary(evm.Message.To != nil, func() string {
+				return evm.Message.To.Hex()
+			}, ""),
+			Value: types.Ternary(evm.Message.Value != nil, func() string {
+				return evm.Message.Value.String()
+			}, ""),
+			ChainId: types.Ternary(evm.chainRules.ChainID != nil, func() string {
+				return evm.chainRules.ChainID.String()
+			}, ""),
+		}
 
-	currentCall := tracer.CallTree().Current()
-	parentIndex := int64(-1)
-	if currentCall != nil && currentCall.Parent != nil {
-		parentIndex = int64(currentCall.Parent.Index)
-	}
+		currentCall := tracer.CallTree().Current()
+		parentIndex := int64(-1)
+		if currentCall != nil && currentCall.Parent != nil {
+			parentIndex = int64(currentCall.Parent.Index)
+		}
 
-	inner := &types.EthStackTransaction{
-		From:        caller.Address().Hex(),
-		To:          addr.Hex(),
-		Data:        input,
-		Value:       value.String(),
-		Gas:         new(big.Int).SetUint64(gas).String(),
-		Index:       tracer.CurrentCallIndex(),
-		ParentIndex: parentIndex,
+		inner = &types.EthStackTransaction{
+			From:        caller.Address().Hex(),
+			To:          addr.Hex(),
+			Data:        input,
+			Value:       value.String(),
+			Gas:         new(big.Int).SetUint64(gas).String(),
+			Index:       tracer.CurrentCallIndex(),
+			ParentIndex: parentIndex,
+		}
+		txAspect := &types.EthTxAspect{
+			Tx:          tx,
+			CurrInnerTx: inner,
+			GasInfo:     &types.GasInfo{Gas: gas},
+		}
+		aspectRes := djpm.AspectInstance().PreContractCall(txAspect)
+		if hasErr, err := aspectRes.HasErr(); hasErr {
+			return nil, aspectRes.GasInfo.Gas, err
+		}
+		gas = aspectRes.GasInfo.Gas
 	}
-	txAspect := &types.EthTxAspect{
-		Tx:          tx,
-		CurrInnerTx: inner,
-		GasInfo:     &types.GasInfo{Gas: gas},
-	}
-	aspectRes := djpm.AspectInstance().PreContractCall(txAspect)
-	if hasErr, err := aspectRes.HasErr(); hasErr {
-		return nil, aspectRes.GasInfo.Gas, err
-	}
-	gas = aspectRes.GasInfo.Gas
-
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -365,25 +380,28 @@ func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte
 			gas = 0
 		}
 		// TODO: consider clearing up unused snapshots:
-		//} else {
+		// } else {
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
 
-	inner.LeftOverGas = gas
-	inner.Ret = ret
+	if evm.Message != nil {
+		inner.LeftOverGas = gas
+		inner.Ret = ret
 
-	retAspect := &types.EthTxAspect{
-		Tx:          tx,
-		CurrInnerTx: inner,
-		GasInfo:     &types.GasInfo{Gas: gas},
+		retAspect := &types.EthTxAspect{
+			Tx:          tx,
+			CurrInnerTx: inner,
+			GasInfo:     &types.GasInfo{Gas: gas},
+		}
+
+		aspectRes := djpm.AspectInstance().PostContractCall(retAspect)
+		if hasErr, postErr := aspectRes.HasErr(); hasErr {
+			return ret, aspectRes.GasInfo.Gas, postErr
+		}
+		gas = aspectRes.GasInfo.Gas
 	}
 
-	aspectRes = djpm.AspectInstance().PostContractCall(retAspect)
-	if hasErr, postErr := aspectRes.HasErr(); hasErr {
-		return ret, aspectRes.GasInfo.Gas, postErr
-	}
-
-	return ret, aspectRes.GasInfo.Gas, err
+	return ret, gas, err
 }
 
 // CallCode executes the contract associated with the addr with the given input
@@ -405,7 +423,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
@@ -446,7 +464,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
@@ -494,7 +512,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// after all empty accounts were deleted, so this is not required. However, if we omit this,
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,

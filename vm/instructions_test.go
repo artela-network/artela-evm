@@ -44,9 +44,11 @@ type twoOperandParams struct {
 	y string
 }
 
-var alphabetSoup = "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-var commonParams []*twoOperandParams
-var twoOpMethods map[string]executionFunc
+var (
+	alphabetSoup = "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	commonParams []*twoOperandParams
+	twoOpMethods map[string]executionFunc
+)
 
 type contractRef struct {
 	addr common.Address
@@ -115,6 +117,7 @@ func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFu
 		expected := new(uint256.Int).SetBytes(common.Hex2Bytes(test.Expected))
 		stack.push(x)
 		stack.push(y)
+		// nolint
 		opFn(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		if len(stack.data) != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", name, len(stack.data))
@@ -213,7 +216,8 @@ func TestAddMod(t *testing.T) {
 		z        string
 		expected string
 	}{
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		{
+			"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe",
 			"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 			"fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe",
@@ -230,7 +234,10 @@ func TestAddMod(t *testing.T) {
 		stack.push(z)
 		stack.push(y)
 		stack.push(x)
-		opAddmod(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
+		_, err := opAddmod(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
+		if err != nil {
+			return
+		}
 		actual := stack.pop()
 		if actual.Cmp(expected) != 0 {
 			t.Errorf("Testcase %d, expected  %x, got %x", i, expected, actual)
@@ -257,7 +264,10 @@ func TestWriteExpectedValues(t *testing.T) {
 			y := new(uint256.Int).SetBytes(common.Hex2Bytes(param.y))
 			stack.push(x)
 			stack.push(y)
-			opFn(&pc, interpreter, &ScopeContext{nil, stack, nil})
+			_, err := opFn(&pc, interpreter, &ScopeContext{nil, stack, nil})
+			if err != nil {
+				return nil
+			}
 			actual := stack.pop()
 			result[i] = TwoOperandTestcase{param.x, param.y, fmt.Sprintf("%064x", actual)}
 		}
@@ -269,7 +279,7 @@ func TestWriteExpectedValues(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_ = os.WriteFile(fmt.Sprintf("testdata/testcases_%v.json", name), data, 0644)
+		_ = os.WriteFile(fmt.Sprintf("testdata/testcases_%v.json", name), data, 0o644)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -284,7 +294,10 @@ func TestJsonTestcases(t *testing.T) {
 			t.Fatal("Failed to read file", err)
 		}
 		var testcases []TwoOperandTestcase
-		json.Unmarshal(data, &testcases)
+		jsonErr := json.Unmarshal(data, &testcases)
+		if jsonErr != nil {
+			t.Fatal("Unmarshal to read file", jsonErr)
+		}
 		testTwoOperandOp(t, testcases, twoOpMethods[name], name)
 	}
 }
@@ -309,6 +322,7 @@ func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 		for _, arg := range intArgs {
 			stack.push(arg)
 		}
+		// nolint
 		op(&pc, evmInterpreter, scope)
 		stack.pop()
 	}
@@ -458,11 +472,13 @@ func BenchmarkOpEq(b *testing.B) {
 
 	opBenchmark(b, opEq, x, y)
 }
+
 func BenchmarkOpEq2(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	y := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201fffffffe"
 	opBenchmark(b, opEq, x, y)
 }
+
 func BenchmarkOpAnd(b *testing.B) {
 	x := alphabetSoup
 	y := alphabetSoup
@@ -513,18 +529,21 @@ func BenchmarkOpSHL(b *testing.B) {
 
 	opBenchmark(b, opSHL, x, y)
 }
+
 func BenchmarkOpSHR(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	y := "ff"
 
 	opBenchmark(b, opSHR, x, y)
 }
+
 func BenchmarkOpSAR(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	y := "ff"
 
 	opBenchmark(b, opSAR, x, y)
 }
+
 func BenchmarkOpIsZero(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	opBenchmark(b, opIszero, x)
@@ -544,12 +563,14 @@ func TestOpMstore(t *testing.T) {
 	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
 	stack.push(new(uint256.Int).SetBytes(common.Hex2Bytes(v)))
 	stack.push(new(uint256.Int))
+	// nolint
 	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
 		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
 	}
 	stack.push(new(uint256.Int).SetUint64(0x1))
 	stack.push(new(uint256.Int))
+	// nolint
 	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
 		t.Fatalf("Mstore failed to overwrite previous value")
@@ -574,6 +595,7 @@ func BenchmarkOpMstore(bench *testing.B) {
 	for i := 0; i < bench.N; i++ {
 		stack.push(value)
 		stack.push(memStart)
+		// nolint
 		opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	}
 }
@@ -603,6 +625,7 @@ func TestOpTstore(t *testing.T) {
 	stack.push(new(uint256.Int).SetBytes(value))
 	// push the location to the stack
 	stack.push(new(uint256.Int))
+	// nolint
 	opTstore(&pc, evmInterpreter, &scopeContext)
 	// there should be no elements on the stack after TSTORE
 	if stack.len() != 0 {
@@ -610,6 +633,7 @@ func TestOpTstore(t *testing.T) {
 	}
 	// push the location to the stack
 	stack.push(new(uint256.Int))
+	// nolint
 	opTload(&pc, evmInterpreter, &scopeContext)
 	// there should be one element on the stack after TLOAD
 	if stack.len() != 1 {
@@ -637,6 +661,7 @@ func BenchmarkOpKeccak256(bench *testing.B) {
 	for i := 0; i < bench.N; i++ {
 		stack.push(uint256.NewInt(32))
 		stack.push(start)
+		// nolint
 		opKeccak256(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	}
 }
@@ -732,6 +757,7 @@ func TestRandom(t *testing.T) {
 			pc             = uint64(0)
 			evmInterpreter = env.interpreter
 		)
+		// nolint
 		opRandom(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		if len(stack.data) != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
