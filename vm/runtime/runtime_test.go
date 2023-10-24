@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artela-network/evm/tracers"
+	"github.com/artela-network/artela-evm/tracers"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -35,8 +35,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 
-	"github.com/artela-network/evm/tracers/logger"
-	"github.com/artela-network/evm/vm"
+	"github.com/artela-network/artela-evm/tracers/logger"
+	"github.com/artela-network/artela-evm/vm"
 
 	// force-load js tracers to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"

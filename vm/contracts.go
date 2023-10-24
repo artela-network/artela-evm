@@ -22,8 +22,8 @@ import (
 	"errors"
 	"math/big"
 
-	inherent "github.com/artela-network/artelasdk/chaincoreext/jit_inherent"
-	"github.com/artela-network/artelasdk/types"
+	inherent "github.com/artela-network/aspect-core/chaincoreext/jit_inherent"
+	"github.com/artela-network/aspect-core/types"
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"

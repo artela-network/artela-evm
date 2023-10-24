@@ -23,8 +23,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/artela-network/evm/vm"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/artela-network/artela-evm/vm"
 )
 
 // Context contains some contextual infos for a transaction execution that is not

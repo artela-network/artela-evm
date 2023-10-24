@@ -22,10 +22,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/artela-network/evm/vm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/params"
+
+	"github.com/artela-network/artela-evm/vm"
 )
 
 type dummyContractRef struct {

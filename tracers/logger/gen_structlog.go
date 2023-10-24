@@ -5,7 +5,7 @@ package logger
 import (
 	"encoding/json"
 
-	"github.com/artela-network/evm/vm"
+	"github.com/artela-network/artela-evm/vm"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"

@@ -20,9 +20,9 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"github.com/artela-network/artelasdk/djpm"
-	"github.com/artela-network/artelasdk/integration"
-	"github.com/artela-network/artelasdk/types"
+	"github.com/artela-network/aspect-core/djpm"
+	"github.com/artela-network/aspect-core/integration"
+	"github.com/artela-network/aspect-core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	ethvm "github.com/ethereum/go-ethereum/core/vm"

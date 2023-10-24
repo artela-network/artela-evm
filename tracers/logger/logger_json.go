@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 
-	"github.com/artela-network/evm/vm"
+	"github.com/artela-network/artela-evm/vm"
 )
 
 type JSONLogger struct {
