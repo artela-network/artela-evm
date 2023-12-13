@@ -173,6 +173,8 @@ type EVM struct {
 	callGasTemp uint64
 	// state change & call stack tracer
 	tracer *Tracer
+
+	IsExecuteJP bool
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
@@ -186,6 +188,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
 		tracer:      NewTracer(),
+		IsExecuteJP: true,
 	}
 	evm.interpreter = NewEVMInterpreter(evm)
 	return evm
@@ -243,7 +246,8 @@ func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte
 	tx := &types.EthTransaction{}
 	blockNum := evm.Context.BlockNumber.Uint64()
 	blockHash := evm.Context.GetHash(blockNum)
-	if evm.Message != nil {
+
+	if evm.Message != nil && evm.IsExecuteJP {
 		tx = &types.EthTransaction{
 			BlockHash:   blockHash.Bytes(),
 			BlockNumber: int64(blockNum),
@@ -384,7 +388,7 @@ func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte
 		//	evm.StateDB.DiscardSnapshot(snapshot)
 	}
 
-	if evm.Message != nil {
+	if evm.Message != nil && evm.IsExecuteJP {
 		inner.LeftOverGas = gas
 		inner.Ret = ret
 
@@ -684,3 +688,6 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
+
+func (evm *EVM) CloseAspectCall() { evm.IsExecuteJP = false }
+func (evm *EVM) AspectCall()      { evm.IsExecuteJP = true }
