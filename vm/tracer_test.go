@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
@@ -52,7 +53,7 @@ func TestNewCommands(t *testing.T) {
 	statedb.Finalise(true)
 
 	evm = NewEVM(vmctx, TxContext{Message: message}, statedb, params.AllEthashProtocolChanges, vmConf)
-	_, _, err = evm.Call(AccountRef(sender), address, common.Hex2Bytes(input), math.MaxUint64, new(big.Int))
+	_, _, err = evm.Call(context.Background(), AccountRef(sender), address, common.Hex2Bytes(input), math.MaxUint64, new(big.Int))
 	if err != nil {
 		t.Error(err)
 	}

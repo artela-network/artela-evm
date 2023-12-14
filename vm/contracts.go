@@ -105,7 +105,7 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{7}):   &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{8}):   &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{9}):   &blake2F{},
-	common.BytesToAddress([]byte{100}): &context{},
+	common.BytesToAddress([]byte{100}): &aspcontext{},
 	common.BytesToAddress([]byte{101}): &userOpSender{},
 	common.BytesToAddress([]byte{102}): &contextWriter{},
 }
@@ -1077,14 +1077,14 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 }
 
 // CONTEXT implemented aspect context query as a native contract.
-type context struct{}
+type aspcontext struct{}
 
-func (c *context) RequiredGas(input []byte) uint64 {
+func (c *aspcontext) RequiredGas(input []byte) uint64 {
 	// TODO: refactor this later
 	return 5000
 }
 
-func (c *context) Run(input []byte) ([]byte, error) {
+func (c *aspcontext) Run(input []byte) ([]byte, error) {
 	if input == nil || len(input) < 20 {
 		return nil, nil
 	}

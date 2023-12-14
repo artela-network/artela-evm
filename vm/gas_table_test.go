@@ -18,6 +18,7 @@ package vm
 
 import (
 	"bytes"
+	"context"
 	"math"
 	"math/big"
 	"sort"
@@ -96,7 +97,7 @@ func TestEIP2200(t *testing.T) {
 		}
 		vmenv := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, Config{ExtraEips: []int{2200}})
 
-		_, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, tt.gaspool, new(big.Int))
+		_, gas, err := vmenv.Call(context.Background(), AccountRef(common.Address{}), address, nil, tt.gaspool, new(big.Int))
 		if err != tt.failure {
 			t.Errorf("test %d: failure mismatch: have %v, want %v", i, err, tt.failure)
 		}
@@ -152,7 +153,7 @@ func TestCreateGas(t *testing.T) {
 
 			vmenv := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, config)
 			startGas := uint64(testGas)
-			ret, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, startGas, new(big.Int))
+			ret, gas, err := vmenv.Call(context.Background(), AccountRef(common.Address{}), address, nil, startGas, new(big.Int))
 			if err != nil {
 				return false
 			}

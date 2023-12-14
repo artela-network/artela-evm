@@ -17,6 +17,7 @@
 package runtime
 
 import (
+	"context"
 	"math"
 	"math/big"
 
@@ -101,7 +102,7 @@ func setDefaults(cfg *Config) {
 //
 // Execute sets up an in-memory, temporary, environment for the execution of
 // the given code. It makes sure that it's restored to its original state afterwards.
-func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
+func Execute(ctx context.Context, code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
@@ -125,6 +126,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	cfg.State.SetCode(address, code)
 	// Call the code with the given configuration.
 	ret, _, err := vmenv.Call(
+		ctx,
 		sender,
 		common.BytesToAddress([]byte("contract")),
 		input,
@@ -168,7 +170,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 //
 // Call, unlike Execute, requires a config and also requires the State field to
 // be set.
-func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, error) {
+func Call(ctx context.Context, address common.Address, input []byte, cfg *Config) ([]byte, uint64, error) {
 	setDefaults(cfg)
 
 	var (
@@ -184,6 +186,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 
 	// Call the code with the given configuration.
 	ret, leftOverGas, err := vmenv.Call(
+		ctx,
 		sender,
 		address,
 		input,

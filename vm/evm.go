@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"context"
 	"math/big"
 	"sync/atomic"
 
@@ -231,7 +232,7 @@ func (evm *EVM) Tracer() *Tracer {
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) Call(ctx context.Context, caller ethvm.ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	tracer := evm.Tracer()
 	tracer.SaveCall(caller.Address(), addr, input, uint256.MustFromBig(value), uint256.NewInt(gas))
 
@@ -290,7 +291,7 @@ func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte
 			CurrInnerTx: inner,
 			GasInfo:     &types.GasInfo{Gas: gas},
 		}
-		aspectRes := djpm.AspectInstance().PreContractCall(txAspect)
+		aspectRes := djpm.AspectInstance().PreContractCall(ctx, txAspect)
 		if hasErr, err := aspectRes.HasErr(); hasErr {
 			return nil, aspectRes.GasInfo.Gas, err
 		}
@@ -394,7 +395,7 @@ func (evm *EVM) Call(caller ethvm.ContractRef, addr common.Address, input []byte
 			GasInfo:     &types.GasInfo{Gas: gas},
 		}
 
-		aspectRes := djpm.AspectInstance().PostContractCall(retAspect)
+		aspectRes := djpm.AspectInstance().PostContractCall(ctx, retAspect)
 		if hasErr, postErr := aspectRes.HasErr(); hasErr {
 			return ret, aspectRes.GasInfo.Gas, postErr
 		}
