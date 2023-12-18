@@ -46,7 +46,7 @@ func TestNewCommands(t *testing.T) {
 	}
 
 	evm := NewEVM(vmctx, TxContext{Message: message}, statedb, params.AllEthashProtocolChanges, vmConf)
-	_, address, _, err := evm.Create(AccountRef(sender), common.Hex2Bytes(byteCode), math.MaxUint64, new(big.Int))
+	_, address, _, err := evm.Create(context.Background(), AccountRef(sender), common.Hex2Bytes(byteCode), math.MaxUint64, new(big.Int))
 	if err != nil {
 		t.Error(err)
 	}

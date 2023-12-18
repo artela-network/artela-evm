@@ -882,7 +882,7 @@ func TestJSTracerCreateTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, _, err = Create(code, &Config{
+	_, _, _, err = Create(context.Background(), code, &Config{
 		State: statedb,
 		EVMConfig: vm.Config{
 			Tracer: tracer,

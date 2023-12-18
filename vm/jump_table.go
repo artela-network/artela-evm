@@ -17,13 +17,14 @@
 package vm
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/params"
 )
 
 type (
-	executionFunc func(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error)
+	executionFunc func(ctx context.Context, pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error)
 	gasFunc       func(*EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
 	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
 	memorySizeFunc func(*Stack) (size uint64, overflow bool)

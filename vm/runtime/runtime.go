@@ -137,7 +137,7 @@ func Execute(ctx context.Context, code, input []byte, cfg *Config) ([]byte, *sta
 }
 
 // Create executes the code using the EVM create method
-func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
+func Create(ctx context.Context, input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
@@ -157,6 +157,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	cfg.State.Prepare(rules, cfg.Origin, cfg.Coinbase, nil, vm.ActivePrecompiles(rules), nil)
 	// Call the code with the given configuration.
 	code, address, leftOverGas, err := vmenv.Create(
+		ctx,
 		sender,
 		input,
 		cfg.GasLimit,

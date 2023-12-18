@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"context"
 	"fmt"
 	"sort"
 
@@ -83,7 +84,7 @@ func enable1884(jt *JumpTable) {
 	}
 }
 
-func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opSelfBalance(ctx context.Context, pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	balance, _ := uint256.FromBig(interpreter.evm.StateDB.GetBalance(scope.Contract.Address()))
 	scope.Stack.push(balance)
 	return nil, nil
@@ -102,7 +103,7 @@ func enable1344(jt *JumpTable) {
 }
 
 // opChainID implements CHAINID opcode
-func opChainID(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opChainID(ctx context.Context, pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	chainId, _ := uint256.FromBig(interpreter.evm.chainConfig.ChainID)
 	scope.Stack.push(chainId)
 	return nil, nil
@@ -193,7 +194,7 @@ func enable1153(jt *JumpTable) {
 }
 
 // opTload implements TLOAD opcode
-func opTload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opTload(ctx context.Context, pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	loc := scope.Stack.peek()
 	hash := common.Hash(loc.Bytes32())
 	val := interpreter.evm.StateDB.GetTransientState(scope.Contract.Address(), hash)
@@ -202,7 +203,7 @@ func opTload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 }
 
 // opTstore implements TSTORE opcode
-func opTstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opTstore(ctx context.Context, pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	if interpreter.readOnly {
 		return nil, ErrWriteProtection
 	}
@@ -213,7 +214,7 @@ func opTstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 }
 
 // opBaseFee implements BASEFEE opcode
-func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opBaseFee(ctx context.Context, pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	baseFee, _ := uint256.FromBig(interpreter.evm.Context.BaseFee)
 	scope.Stack.push(baseFee)
 	return nil, nil
@@ -231,7 +232,7 @@ func enable3855(jt *JumpTable) {
 }
 
 // opPush0 implements the PUSH0 opcode
-func opPush0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opPush0(ctx context.Context, pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(new(uint256.Int))
 	return nil, nil
 }
