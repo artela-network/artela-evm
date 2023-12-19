@@ -1091,7 +1091,7 @@ func (c *aspcontext) Run(ctx context.Context, input []byte) ([]byte, error) {
 	}
 	aspectId := common.BytesToAddress(input[:20])
 	key := string(input[20:])
-	value := types.GetAspectContext(aspectId.Hex(), key)
+	value := types.GetAspectContext(ctx, aspectId.Hex(), key)
 
 	return []byte(value), nil
 }
@@ -1145,7 +1145,7 @@ func (c *contextWriter) Run(ctx context.Context, input []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	types.SetAspectContext(c.ctx.from.Hex(), key, value)
+	types.SetAspectContext(ctx, c.ctx.from.Hex(), key, value)
 
 	return nil, nil
 }
