@@ -1091,7 +1091,10 @@ func (c *aspcontext) Run(ctx context.Context, input []byte) ([]byte, error) {
 	}
 	aspectId := common.BytesToAddress(input[:20])
 	key := string(input[20:])
-	value := types.GetAspectContext(ctx, aspectId.Hex(), key)
+	value, err := types.GetAspectContext(ctx, aspectId.Hex(), key)
+	if err != nil {
+		return nil, err
+	}
 
 	return []byte(value), nil
 }
@@ -1112,7 +1115,10 @@ func (u *userOpSender) Run(ctx context.Context, input []byte) ([]byte, error) {
 	var userOpHash common.Hash
 	userOpHash.SetBytes(input)
 
-	aspectId := coretypes.JITSenderAspectByContext(ctx, userOpHash)
+	aspectId, err := coretypes.JITSenderAspectByContext(ctx, userOpHash)
+	if err != nil {
+		return nil, err
+	}
 	return aspectId.Hash().Bytes(), nil
 }
 
@@ -1145,7 +1151,9 @@ func (c *contextWriter) Run(ctx context.Context, input []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	types.SetAspectContext(ctx, c.ctx.from.Hex(), key, value)
+	if err := types.SetAspectContext(ctx, c.ctx.from.Hex(), key, value); err != nil {
+		return nil, err
+	}
 
 	return nil, nil
 }
