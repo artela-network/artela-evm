@@ -18,6 +18,7 @@ package vm
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -118,7 +119,7 @@ func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFu
 		stack.push(x)
 		stack.push(y)
 		// nolint
-		opFn(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
+		opFn(context.Background(), &pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		if len(stack.data) != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", name, len(stack.data))
 		}
@@ -234,7 +235,7 @@ func TestAddMod(t *testing.T) {
 		stack.push(z)
 		stack.push(y)
 		stack.push(x)
-		_, err := opAddmod(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
+		_, err := opAddmod(context.Background(), &pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		if err != nil {
 			return
 		}
@@ -264,7 +265,7 @@ func TestWriteExpectedValues(t *testing.T) {
 			y := new(uint256.Int).SetBytes(common.Hex2Bytes(param.y))
 			stack.push(x)
 			stack.push(y)
-			_, err := opFn(&pc, interpreter, &ScopeContext{nil, stack, nil})
+			_, err := opFn(context.Background(), &pc, interpreter, &ScopeContext{nil, stack, nil})
 			if err != nil {
 				return nil
 			}
@@ -323,7 +324,7 @@ func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 			stack.push(arg)
 		}
 		// nolint
-		op(&pc, evmInterpreter, scope)
+		op(context.Background(), &pc, evmInterpreter, scope)
 		stack.pop()
 	}
 	bench.StopTimer()
@@ -564,14 +565,14 @@ func TestOpMstore(t *testing.T) {
 	stack.push(new(uint256.Int).SetBytes(common.Hex2Bytes(v)))
 	stack.push(new(uint256.Int))
 	// nolint
-	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
+	opMstore(context.Background(), &pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
 		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
 	}
 	stack.push(new(uint256.Int).SetUint64(0x1))
 	stack.push(new(uint256.Int))
 	// nolint
-	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
+	opMstore(context.Background(), &pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
 		t.Fatalf("Mstore failed to overwrite previous value")
 	}
@@ -596,7 +597,7 @@ func BenchmarkOpMstore(bench *testing.B) {
 		stack.push(value)
 		stack.push(memStart)
 		// nolint
-		opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
+		opMstore(context.Background(), &pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	}
 }
 
@@ -626,7 +627,7 @@ func TestOpTstore(t *testing.T) {
 	// push the location to the stack
 	stack.push(new(uint256.Int))
 	// nolint
-	opTstore(&pc, evmInterpreter, &scopeContext)
+	opTstore(context.Background(), &pc, evmInterpreter, &scopeContext)
 	// there should be no elements on the stack after TSTORE
 	if stack.len() != 0 {
 		t.Fatal("stack wrong size")
@@ -634,7 +635,7 @@ func TestOpTstore(t *testing.T) {
 	// push the location to the stack
 	stack.push(new(uint256.Int))
 	// nolint
-	opTload(&pc, evmInterpreter, &scopeContext)
+	opTload(context.Background(), &pc, evmInterpreter, &scopeContext)
 	// there should be one element on the stack after TLOAD
 	if stack.len() != 1 {
 		t.Fatal("stack wrong size")
@@ -662,7 +663,7 @@ func BenchmarkOpKeccak256(bench *testing.B) {
 		stack.push(uint256.NewInt(32))
 		stack.push(start)
 		// nolint
-		opKeccak256(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
+		opKeccak256(context.Background(), &pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	}
 }
 
@@ -758,7 +759,7 @@ func TestRandom(t *testing.T) {
 			evmInterpreter = env.interpreter
 		)
 		// nolint
-		opRandom(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
+		opRandom(context.Background(), &pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		if len(stack.data) != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
 		}
