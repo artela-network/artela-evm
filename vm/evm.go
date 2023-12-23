@@ -237,69 +237,33 @@ func (evm *EVM) Tracer() *Tracer {
 // execution error or failed value transfer.
 func (evm *EVM) Call(ctx context.Context, caller ethvm.ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	tracer := evm.Tracer()
-	tracer.SaveCall(caller.Address(), addr, input, uint256.MustFromBig(value), uint256.NewInt(gas))
+	tracer.SaveCall(caller.Address(), &addr, input, uint256.MustFromBig(value), uint256.NewInt(gas))
 
 	// exit from a call
 	defer func() {
-		tracer.ExitCall(leftOverGas, ret)
+		tracer.ExitCall(leftOverGas, ret, err)
 	}()
-	inner := &types.EthStackTransaction{}
-	tx := &types.EthTransaction{}
+
 	blockNum := evm.Context.BlockNumber.Uint64()
-	blockHash := evm.Context.GetHash(blockNum)
+	currentCall := tracer.CallTree().Current()
 
-	if evm.Message != nil && evm.IsExecuteJP {
-		tx = &types.EthTransaction{
-			BlockHash:   blockHash.Bytes(),
-			BlockNumber: int64(blockNum),
-			From:        evm.Origin.Hex(),
-			Gas:         evm.Message.GasLimit,
-			GasPrice: types.Ternary(evm.Message.GasPrice != nil, func() string {
-				return evm.Message.GasPrice.String()
-			}, ""),
-			GasFeeCap: types.Ternary(evm.Message.GasFeeCap != nil, func() string {
-				return evm.Message.GasFeeCap.String()
-			}, ""),
-			GasTipCap: types.Ternary(evm.Message.GasTipCap != nil, func() string {
-				return evm.Message.GasTipCap.String()
-			}, ""),
-			Input: evm.Message.Data,
-			To: types.Ternary(evm.Message.To != nil, func() string {
-				return evm.Message.To.Hex()
-			}, ""),
-			Value: types.Ternary(evm.Message.Value != nil, func() string {
-				return evm.Message.Value.String()
-			}, ""),
-			ChainId: types.Ternary(evm.chainRules.ChainID != nil, func() string {
-				return evm.chainRules.ChainID.String()
-			}, ""),
+	if evm.IsExecuteJP {
+		preCallResult := djpm.AspectInstance().PreContractCall(ctx, &addr, int64(blockNum), gas, &types.PreContractCallInput{
+			Call: &types.PreExecMessageInput{
+				From:  caller.Address().Bytes(),
+				To:    addr.Bytes(),
+				Index: currentCall.Index,
+				Data:  input,
+				Value: value.Bytes(),
+				Gas:   gas,
+			},
+			Block: &types.BlockInput{Number: blockNum},
+		})
+		if preCallResult.Err != nil {
+			return preCallResult.Ret, preCallResult.Gas, preCallResult.Err
 		}
 
-		currentCall := tracer.CallTree().Current()
-		parentIndex := int64(-1)
-		if currentCall != nil && currentCall.Parent != nil {
-			parentIndex = int64(currentCall.Parent.Index)
-		}
-
-		inner = &types.EthStackTransaction{
-			From:        caller.Address().Hex(),
-			To:          addr.Hex(),
-			Data:        input,
-			Value:       value.String(),
-			Gas:         new(big.Int).SetUint64(gas).String(),
-			Index:       tracer.CurrentCallIndex(),
-			ParentIndex: parentIndex,
-		}
-		txAspect := &types.EthTxAspect{
-			Tx:          tx,
-			CurrInnerTx: inner,
-			GasInfo:     &types.GasInfo{Gas: gas},
-		}
-		aspectRes := djpm.AspectInstance().PreContractCall(ctx, txAspect)
-		if hasErr, err := aspectRes.HasErr(); hasErr {
-			return nil, aspectRes.GasInfo.Gas, err
-		}
-		gas = aspectRes.GasInfo.Gas
+		gas = preCallResult.Gas
 	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
@@ -374,6 +338,31 @@ func (evm *EVM) Call(ctx context.Context, caller ethvm.ContractRef, addr common.
 			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
 			ret, err = evm.interpreter.Run(ctx, contract, input, false)
 			gas = contract.Gas
+
+			if evm.IsExecuteJP {
+				var errorMsg string
+				if err != nil {
+					errorMsg = err.Error()
+				}
+				postCallResult := djpm.AspectInstance().PostContractCall(ctx, &addr, int64(blockNum), gas, &types.PostContractCallInput{
+					Call: &types.PostExecMessageInput{
+						From:  caller.Address().Bytes(),
+						To:    addr.Bytes(),
+						Index: currentCall.Index,
+						Data:  input,
+						Value: value.Bytes(),
+						Gas:   gas,
+						Ret:   ret,
+						Error: errorMsg,
+					},
+					Block: &types.BlockInput{Number: blockNum},
+				})
+				if postCallResult.Err != nil {
+					err = postCallResult.Err
+					ret = postCallResult.Ret
+				}
+				gas = postCallResult.Gas
+			}
 		}
 	}
 	// When an error was returned by the EVM or when setting the creation code
@@ -387,23 +376,6 @@ func (evm *EVM) Call(ctx context.Context, caller ethvm.ContractRef, addr common.
 		// TODO: consider clearing up unused snapshots:
 		// } else {
 		//	evm.StateDB.DiscardSnapshot(snapshot)
-	}
-
-	if evm.Message != nil && evm.IsExecuteJP {
-		inner.LeftOverGas = gas
-		inner.Ret = ret
-
-		retAspect := &types.EthTxAspect{
-			Tx:          tx,
-			CurrInnerTx: inner,
-			GasInfo:     &types.GasInfo{Gas: gas},
-		}
-
-		aspectRes := djpm.AspectInstance().PostContractCall(ctx, retAspect)
-		if hasErr, postErr := aspectRes.HasErr(); hasErr {
-			return ret, aspectRes.GasInfo.Gas, postErr
-		}
-		gas = aspectRes.GasInfo.Gas
 	}
 
 	return ret, gas, err
@@ -574,11 +546,11 @@ func (c *codeAndHash) Hash() common.Hash {
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(ctx context.Context, caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) (ret []byte, addr common.Address, leftoverGas uint64, err error) {
 	tracer := evm.Tracer()
-	tracer.SaveCall(caller.Address(), address, codeAndHash.code, uint256.MustFromBig(value), uint256.NewInt(gas))
+	tracer.SaveCall(caller.Address(), nil, codeAndHash.code, uint256.MustFromBig(value), uint256.NewInt(gas))
 
 	// Reset call stack to its Parent
 	defer func() {
-		tracer.ExitCall(leftoverGas, ret)
+		tracer.ExitCall(leftoverGas, ret, err)
 	}()
 
 	// Depth check execution. Fail if we're trying to execute above the

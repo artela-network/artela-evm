@@ -3,10 +3,9 @@ package vm
 import (
 	"bytes"
 	"errors"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
+	"math/big"
 )
 
 type NodeType int
@@ -373,16 +372,17 @@ func (s *StateChanges) IndicesOfChanges(account common.Address, stateVarName str
 
 // Call records the current contract call information
 type Call struct {
-	From         common.Address `json:"from"`
-	To           common.Address `json:"to"`
-	Data         []byte         `json:"data"`
-	Value        *uint256.Int   `json:"value"`
-	Gas          *uint256.Int   `json:"gas"`
-	Index        uint64         `json:"index"`
-	Parent       *Call          `json:"parent"`
-	Children     []*Call        `json:"children"`
-	Ret          []byte         `json:"ret"`
-	RemainingGas uint64         `json:"remainingGas"`
+	From         common.Address  `json:"from"`
+	To           *common.Address `json:"to"`
+	Data         []byte          `json:"data"`
+	Value        *uint256.Int    `json:"value"`
+	Gas          *uint256.Int    `json:"gas"`
+	Index        uint64          `json:"index"`
+	Parent       *Call           `json:"parent"`
+	Children     []*Call         `json:"children"`
+	Ret          []byte          `json:"ret"`
+	RemainingGas uint64          `json:"remainingGas"`
+	Err          error           `json:"err"`
 }
 
 // IsRoot checks whether current call is the original call
@@ -391,8 +391,11 @@ func (c *Call) IsRoot() bool {
 }
 
 // ParentIndex returns the index of Parent call
-func (c *Call) ParentIndex() uint64 {
-	return c.Parent.Index
+func (c *Call) ParentIndex() int64 {
+	if c.Parent == nil {
+		return -1
+	}
+	return int64(c.Parent.Index)
 }
 
 // ChildrenIndices returns the indices of all children calls
@@ -420,7 +423,7 @@ func NewCallTree() *CallTree {
 }
 
 // add a new call to the current call tree
-func (c *CallTree) add(from, to common.Address, data []byte, value, gas *uint256.Int) {
+func (c *CallTree) add(from common.Address, to *common.Address, data []byte, value, gas *uint256.Int) {
 	newCall := &Call{
 		From:  from,
 		To:    to,
@@ -447,13 +450,14 @@ func (c *CallTree) add(from, to common.Address, data []byte, value, gas *uint256
 }
 
 // exit from a call, reset current to its Parent
-func (c *CallTree) exit(leftoverGas uint64, ret []byte) {
+func (c *CallTree) exit(leftoverGas uint64, ret []byte, err error) {
 	if c.current == nil {
 		return
 	}
 
 	c.current.RemainingGas = leftoverGas
 	c.current.Ret = ret
+	c.current.Err = err
 
 	c.current = c.current.Parent
 }
@@ -528,13 +532,13 @@ func (t *Tracer) SaveStateKey(account common.Address, parent, self, offset *uint
 }
 
 // SaveCall saves a call to call tree
-func (t *Tracer) SaveCall(from, to common.Address, data []byte, value *uint256.Int, gas *uint256.Int) {
+func (t *Tracer) SaveCall(from common.Address, to *common.Address, data []byte, value *uint256.Int, gas *uint256.Int) {
 	t.callTree.add(from, to, data, value, gas)
 }
 
 // ExitCall exits from current call stack
-func (t *Tracer) ExitCall(leftoverGas uint64, ret []byte) {
-	t.callTree.exit(leftoverGas, ret)
+func (t *Tracer) ExitCall(leftoverGas uint64, ret []byte, err error) {
+	t.callTree.exit(leftoverGas, ret, err)
 }
 
 // CallTree returns the current call tree

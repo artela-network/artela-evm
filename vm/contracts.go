@@ -1089,14 +1089,14 @@ func (c *aspcontext) Run(ctx context.Context, input []byte) ([]byte, error) {
 	if input == nil || len(input) < 20 {
 		return nil, nil
 	}
-	aspectId := common.BytesToAddress(input[:20])
+	address := common.BytesToAddress(input[:20])
 	key := string(input[20:])
-	value, err := types.GetAspectContext(ctx, aspectId.Hex(), key)
+	value, err := types.GetAspectContext(ctx, address, key)
 	if err != nil {
 		return nil, err
 	}
 
-	return []byte(value), nil
+	return value, nil
 }
 
 // userOpSender implemented user operation sender aspect query for solidity.
@@ -1141,43 +1141,49 @@ func (c *contextWriter) Run(ctx context.Context, input []byte) ([]byte, error) {
 		return nil, nil
 	}
 
-	key, err := c.loadParamString(input, 0)
+	key, err := loadParamBytes(input, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	value, err := c.loadParamString(input, 1)
+	value, err := loadParamBytes(input, 1)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := types.SetAspectContext(ctx, c.ctx.from.Hex(), key, value); err != nil {
+	if err := types.SetAspectContext(ctx, c.ctx.from, string(key), value); err != nil {
 		return nil, err
 	}
 
 	return nil, nil
 }
 
-func (c *contextWriter) loadParamString(input []byte, index int) (string, error) {
-	dataOffset, overflow := uint256.NewInt(0).SetBytes32(input[index*32 : (index+1)*32]).Uint64WithOverflow()
+func loadParamBytes(input []byte, index int) ([]byte, error) {
+	offsetLowerBound := index * 32
+	offsetUpperbound := offsetLowerBound + 32
+	if len(input) < offsetUpperbound {
+		return nil, errors.New("invalid input data length")
+	}
+
+	dataOffset, overflow := uint256.NewInt(0).SetBytes32(input[offsetLowerBound:offsetUpperbound]).Uint64WithOverflow()
 	if overflow {
-		return "", errors.New("invalid offset")
+		return nil, errors.New("invalid offset")
 	}
 
 	start := dataOffset + 32
 	if start > uint64(len(input)) {
-		return "", errors.New("invalid param length")
+		return nil, errors.New("invalid param length")
 	}
 
 	dataLen, overflow := uint256.NewInt(0).SetBytes32(input[dataOffset:start]).Uint64WithOverflow()
 	if overflow {
-		return "", errors.New("invalid length")
+		return nil, errors.New("invalid length")
 	}
 
 	end := start + dataLen
 	if end > uint64(len(input)) {
-		return "", errors.New("invalid param length")
+		return nil, errors.New("invalid param length")
 	}
 
-	return string(input[start:end]), nil
+	return input[start:end], nil
 }
