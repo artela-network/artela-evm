@@ -252,12 +252,12 @@ func (evm *EVM) Call(ctx context.Context, caller ethvm.ContractRef, addr common.
 			Call: &types.PreExecMessageInput{
 				From:  caller.Address().Bytes(),
 				To:    addr.Bytes(),
-				Index: currentCall.Index,
+				Index: &currentCall.Index,
 				Data:  input,
 				Value: value.Bytes(),
-				Gas:   gas,
+				Gas:   &gas,
 			},
-			Block: &types.BlockInput{Number: blockNum},
+			Block: &types.BlockInput{Number: &blockNum},
 		})
 		if preCallResult.Err != nil {
 			return preCallResult.Ret, preCallResult.Gas, preCallResult.Err
@@ -348,14 +348,14 @@ func (evm *EVM) Call(ctx context.Context, caller ethvm.ContractRef, addr common.
 					Call: &types.PostExecMessageInput{
 						From:  caller.Address().Bytes(),
 						To:    addr.Bytes(),
-						Index: currentCall.Index,
+						Index: &currentCall.Index,
 						Data:  input,
 						Value: value.Bytes(),
-						Gas:   gas,
+						Gas:   &gas,
 						Ret:   ret,
-						Error: errorMsg,
+						Error: &errorMsg,
 					},
-					Block: &types.BlockInput{Number: blockNum},
+					Block: &types.BlockInput{Number: &blockNum},
 				})
 				if postCallResult.Err != nil {
 					err = postCallResult.Err
