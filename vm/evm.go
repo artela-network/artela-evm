@@ -260,6 +260,10 @@ func (evm *EVM) Call(ctx context.Context, caller ethvm.ContractRef, addr common.
 			Block: &types.BlockInput{Number: &blockNum},
 		})
 		if preCallResult.Err != nil {
+			if preCallResult.Err.Error() == ErrOutOfGas.Error() {
+				preCallResult.Err = ErrOutOfGas
+			}
+
 			return preCallResult.Ret, preCallResult.Gas, preCallResult.Err
 		}
 
@@ -358,8 +362,12 @@ func (evm *EVM) Call(ctx context.Context, caller ethvm.ContractRef, addr common.
 					Block: &types.BlockInput{Number: &blockNum},
 				})
 				if postCallResult.Err != nil {
-					err = postCallResult.Err
-					ret = postCallResult.Ret
+					if postCallResult.Err.Error() == ErrOutOfGas.Error() {
+						err = ErrOutOfGas
+					} else {
+						err = postCallResult.Err
+						ret = postCallResult.Ret
+					}
 				}
 				gas = postCallResult.Gas
 			}
