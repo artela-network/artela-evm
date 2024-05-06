@@ -3,7 +3,7 @@ module github.com/artela-network/artela-evm
 go 1.20
 
 require (
-	github.com/artela-network/aspect-core v0.4.7-rc6
+	github.com/artela-network/aspect-core v0.4.7-rc7
 	github.com/ethereum/go-ethereum v1.12.0
 	github.com/holiman/uint256 v1.2.2
 	github.com/stretchr/testify v1.8.2
@@ -70,9 +70,4 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-)
-
-replace (
-	github.com/artela-network/aspect-core => ../aspect-core
-	github.com/artela-network/aspect-runtime => ../runtime
 )
