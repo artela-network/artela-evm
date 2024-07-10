@@ -54,7 +54,7 @@ type aspectCallFrame struct {
 	Output       []byte                 `json:"output,omitempty" rlp:"optional"`
 	Error        string                 `json:"error,omitempty" rlp:"optional"`
 	RevertReason string                 `json:"revertReason,omitempty"`
-	ExecContext  json.RawMessage        `json:"execContext,omitempty"`
+	ExecContext  json.RawMessage        `json:"execContext,omitempty" rlp:"optional"`
 	Calls        []callFrame            `json:"calls,omitempty" rlp:"optional"`
 	// Placed at end on purpose. The RLP will be decoded to 0 instead of
 	// nil if there are non-empty elements after in the struct.
@@ -233,16 +233,18 @@ func (t *callTracer) CaptureAspectExit(joinpoint types.JoinPointRunType, result 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	toCopy := to
-	t.callstack[0] = callFrame{
-		Type:  vm.CALL,
-		From:  from,
-		To:    &toCopy,
-		Input: common.CopyBytes(input),
-		Gas:   t.gasLimit,
-		Value: value,
-	}
+
+	// reuse exiting one, avoid pre-tx execute gets dropped
+	t.callstack[0].From = from
+	t.callstack[0].To = &toCopy
+	t.callstack[0].Input = common.CopyBytes(input)
+	t.callstack[0].Gas = t.gasLimit
+	t.callstack[0].Value = value
+
 	if create {
 		t.callstack[0].Type = vm.CREATE
+	} else {
+		t.callstack[0].Type = vm.CALL
 	}
 }
 

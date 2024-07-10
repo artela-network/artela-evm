@@ -65,7 +65,6 @@ type flatCallFrame struct {
 	Error               string          `json:"error,omitempty"`
 	Result              *flatCallResult `json:"result,omitempty"`
 	Subtraces           int             `json:"subtraces"`
-	JoinPoints          int             `json:"joinPoints"`
 	TraceAddress        []int           `json:"traceAddress"`
 	TransactionHash     *common.Hash    `json:"transactionHash"`
 	TransactionPosition uint64          `json:"transactionPosition"`
@@ -271,8 +270,7 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 
 	frame.TraceAddress = traceAddress
 	frame.Error = input.Error
-	frame.Subtraces = len(input.Calls)
-	frame.JoinPoints = len(input.JoinPoints)
+	frame.Subtraces = len(input.Calls) + len(input.JoinPoints)
 	fillCallFrameFromContext(frame, ctx)
 	if convertErrs {
 		convertErrorToParity(frame)
@@ -286,10 +284,30 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 
 	output = append(output, *frame)
 
+	// parse pre call aspect frames
+	preCallJPCount := 0
+	if len(input.JoinPoints) > 0 {
+		for i, joinPoint := range input.JoinPoints {
+			if !joinPoint.Type.IsPreCall() {
+				continue
+			}
+
+			joinPointCopy := joinPoint
+			childAddr := childTraceAddress(traceAddress, i)
+			flat, err := flatAspectNested(&joinPointCopy, childAddr, convertErrs, ctx)
+
+			if err != nil {
+				return nil, err
+			}
+			output = append(output, flat...)
+			preCallJPCount++
+		}
+	}
+
 	// parse sub calls
 	if len(input.Calls) > 0 {
 		for i, childCall := range input.Calls {
-			childAddr := childTraceAddress(traceAddress, i)
+			childAddr := childTraceAddress(traceAddress, i+preCallJPCount)
 			childCallCopy := childCall
 			flat, err := flatFromNested(&childCallCopy, childAddr, convertErrs, ctx)
 			if err != nil {
@@ -299,11 +317,15 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 		}
 	}
 
-	// parse aspect frames
+	// parse post call aspect frames
 	if len(input.JoinPoints) > 0 {
 		for i, joinPoint := range input.JoinPoints {
-			childAddr := childTraceAddress(traceAddress, i)
+			if joinPoint.Type.IsPreCall() {
+				continue
+			}
+
 			joinPointCopy := joinPoint
+			childAddr := childTraceAddress(traceAddress, i+len(input.Calls))
 			flat, err := flatAspectNested(&joinPointCopy, childAddr, convertErrs, ctx)
 			if err != nil {
 				return nil, err
