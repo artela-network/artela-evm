@@ -4,6 +4,7 @@ package native
 
 import (
 	"encoding/json"
+	"github.com/artela-network/aspect-core/types"
 	"math/big"
 
 	"github.com/artela-network/artela-evm/vm"
@@ -16,19 +17,20 @@ var _ = (*callFrameMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (c callFrame) MarshalJSON() ([]byte, error) {
 	type callFrame0 struct {
-		Type         vm.OpCode       `json:"-"`
-		From         common.Address  `json:"from"`
-		Gas          hexutil.Uint64  `json:"gas"`
-		GasUsed      hexutil.Uint64  `json:"gasUsed"`
-		To           *common.Address `json:"to,omitempty" rlp:"optional"`
-		Input        hexutil.Bytes   `json:"input" rlp:"optional"`
-		Output       hexutil.Bytes   `json:"output,omitempty" rlp:"optional"`
-		Error        string          `json:"error,omitempty" rlp:"optional"`
-		RevertReason string          `json:"revertReason,omitempty"`
-		Calls        []callFrame     `json:"calls,omitempty" rlp:"optional"`
-		Logs         []callLog       `json:"logs,omitempty" rlp:"optional"`
-		Value        *hexutil.Big    `json:"value,omitempty" rlp:"optional"`
-		TypeString   string          `json:"type"`
+		Type         vm.OpCode         `json:"-"`
+		From         common.Address    `json:"from"`
+		Gas          hexutil.Uint64    `json:"gas"`
+		GasUsed      hexutil.Uint64    `json:"gasUsed"`
+		To           *common.Address   `json:"to,omitempty" rlp:"optional"`
+		Input        hexutil.Bytes     `json:"input" rlp:"optional"`
+		Output       hexutil.Bytes     `json:"output,omitempty" rlp:"optional"`
+		Error        string            `json:"error,omitempty" rlp:"optional"`
+		RevertReason string            `json:"revertReason,omitempty"`
+		Calls        []callFrame       `json:"calls,omitempty" rlp:"optional"`
+		Logs         []callLog         `json:"logs,omitempty" rlp:"optional"`
+		JoinPoints   []aspectCallFrame `json:"joinPoints,omitempty" rlp:"optional"`
+		Value        *hexutil.Big      `json:"value,omitempty" rlp:"optional"`
+		TypeString   string            `json:"type"`
 	}
 	var enc callFrame0
 	enc.Type = c.Type
@@ -44,24 +46,26 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 	enc.Logs = c.Logs
 	enc.Value = (*hexutil.Big)(c.Value)
 	enc.TypeString = c.TypeString()
+	enc.JoinPoints = c.JoinPoints
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
 func (c *callFrame) UnmarshalJSON(input []byte) error {
 	type callFrame0 struct {
-		Type         *vm.OpCode      `json:"-"`
-		From         *common.Address `json:"from"`
-		Gas          *hexutil.Uint64 `json:"gas"`
-		GasUsed      *hexutil.Uint64 `json:"gasUsed"`
-		To           *common.Address `json:"to,omitempty" rlp:"optional"`
-		Input        *hexutil.Bytes  `json:"input" rlp:"optional"`
-		Output       *hexutil.Bytes  `json:"output,omitempty" rlp:"optional"`
-		Error        *string         `json:"error,omitempty" rlp:"optional"`
-		RevertReason *string         `json:"revertReason,omitempty"`
-		Calls        []callFrame     `json:"calls,omitempty" rlp:"optional"`
-		Logs         []callLog       `json:"logs,omitempty" rlp:"optional"`
-		Value        *hexutil.Big    `json:"value,omitempty" rlp:"optional"`
+		Type         *vm.OpCode        `json:"-"`
+		From         *common.Address   `json:"from"`
+		Gas          *hexutil.Uint64   `json:"gas"`
+		GasUsed      *hexutil.Uint64   `json:"gasUsed"`
+		To           *common.Address   `json:"to,omitempty" rlp:"optional"`
+		Input        *hexutil.Bytes    `json:"input" rlp:"optional"`
+		Output       *hexutil.Bytes    `json:"output,omitempty" rlp:"optional"`
+		Error        *string           `json:"error,omitempty" rlp:"optional"`
+		RevertReason *string           `json:"revertReason,omitempty"`
+		Calls        []callFrame       `json:"calls,omitempty" rlp:"optional"`
+		Logs         []callLog         `json:"logs,omitempty" rlp:"optional"`
+		JoinPoints   []aspectCallFrame `json:"joinPoints,omitempty" rlp:"optional"`
+		Value        *hexutil.Big      `json:"value,omitempty" rlp:"optional"`
 	}
 	var dec callFrame0
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -102,6 +106,108 @@ func (c *callFrame) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Value != nil {
 		c.Value = (*big.Int)(dec.Value)
+	}
+	if dec.JoinPoints != nil {
+		c.JoinPoints = dec.JoinPoints
+	}
+	return nil
+}
+
+// MarshalJSON marshals as JSON.
+func (a *aspectCallFrame) MarshalJSON() ([]byte, error) {
+	type aspectCallFrame0 struct {
+		Type         types.JoinPointRunType `json:"-"`
+		Aspect       common.Address         `json:"aspect"`
+		From         common.Address         `json:"from"`
+		Gas          hexutil.Uint64         `json:"gas"`
+		GasUsed      hexutil.Uint64         `json:"gasUsed"`
+		To           common.Address         `json:"to"`
+		Input        hexutil.Bytes          `json:"input" rlp:"optional"`
+		Output       hexutil.Bytes          `json:"output,omitempty" rlp:"optional"`
+		Error        string                 `json:"error,omitempty" rlp:"optional"`
+		RevertReason string                 `json:"revertReason,omitempty"`
+		ExecContext  json.RawMessage        `json:"execContext,omitempty"`
+		Calls        []callFrame            `json:"calls,omitempty" rlp:"optional"`
+		Value        *hexutil.Big           `json:"value,omitempty" rlp:"optional"`
+		TypeString   string                 `json:"type"`
+	}
+	var enc aspectCallFrame0
+	enc.Type = a.Type
+	enc.Aspect = a.Aspect
+	enc.From = a.From
+	enc.Gas = hexutil.Uint64(a.Gas)
+	enc.GasUsed = hexutil.Uint64(a.GasUsed)
+	enc.To = a.To
+	enc.Input = a.Input
+	enc.Output = a.Output
+	enc.Error = a.Error
+	enc.RevertReason = a.RevertReason
+	enc.ExecContext = a.ExecContext
+	enc.Calls = a.Calls
+	enc.Value = (*hexutil.Big)(a.Value)
+	enc.TypeString = a.TypeString()
+	return json.Marshal(&enc)
+}
+
+// UnmarshalJSON unmarshals from JSON.
+func (a *aspectCallFrame) UnmarshalJSON(input []byte) error {
+	type aspectCallFrame0 struct {
+		Type         *types.JoinPointRunType `json:"-"`
+		Aspect       *common.Address         `json:"aspect"`
+		From         *common.Address         `json:"from"`
+		Gas          *hexutil.Uint64         `json:"gas"`
+		GasUsed      *hexutil.Uint64         `json:"gasUsed"`
+		To           *common.Address         `json:"to"`
+		Input        *hexutil.Bytes          `json:"input" rlp:"optional"`
+		Output       *hexutil.Bytes          `json:"output,omitempty" rlp:"optional"`
+		Error        *string                 `json:"error,omitempty" rlp:"optional"`
+		RevertReason *string                 `json:"revertReason,omitempty"`
+		ExecContext  *json.RawMessage        `json:"execContext,omitempty"`
+		Calls        []callFrame             `json:"calls,omitempty" rlp:"optional"`
+		Value        *hexutil.Big            `json:"value,omitempty" rlp:"optional"`
+	}
+	var dec aspectCallFrame0
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if dec.Type != nil {
+		a.Type = *dec.Type
+	}
+	if dec.Aspect != nil {
+		a.Aspect = *dec.Aspect
+	}
+	if dec.From != nil {
+		a.From = *dec.From
+	}
+	if dec.Gas != nil {
+		a.Gas = uint64(*dec.Gas)
+	}
+	if dec.GasUsed != nil {
+		a.GasUsed = uint64(*dec.GasUsed)
+	}
+	if dec.To != nil {
+		a.To = *dec.To
+	}
+	if dec.Input != nil {
+		a.Input = *dec.Input
+	}
+	if dec.Output != nil {
+		a.Output = *dec.Output
+	}
+	if dec.Error != nil {
+		a.Error = *dec.Error
+	}
+	if dec.RevertReason != nil {
+		a.RevertReason = *dec.RevertReason
+	}
+	if dec.ExecContext != nil {
+		a.ExecContext = *dec.ExecContext
+	}
+	if dec.Calls != nil {
+		a.Calls = dec.Calls
+	}
+	if dec.Value != nil {
+		a.Value = (*big.Int)(dec.Value)
 	}
 	return nil
 }

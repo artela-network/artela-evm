@@ -19,6 +19,8 @@ package native
 import (
 	"encoding/json"
 	"errors"
+	"github.com/artela-network/aspect-core/types"
+	"google.golang.org/protobuf/proto"
 	"math/big"
 	"sync/atomic"
 
@@ -41,21 +43,69 @@ type callLog struct {
 	Data    hexutil.Bytes  `json:"data"`
 }
 
-type callFrame struct {
-	Type         vm.OpCode       `json:"-"`
-	From         common.Address  `json:"from"`
-	Gas          uint64          `json:"gas"`
-	GasUsed      uint64          `json:"gasUsed"`
-	To           *common.Address `json:"to,omitempty" rlp:"optional"`
-	Input        []byte          `json:"input" rlp:"optional"`
-	Output       []byte          `json:"output,omitempty" rlp:"optional"`
-	Error        string          `json:"error,omitempty" rlp:"optional"`
-	RevertReason string          `json:"revertReason,omitempty"`
-	Calls        []callFrame     `json:"calls,omitempty" rlp:"optional"`
-	Logs         []callLog       `json:"logs,omitempty" rlp:"optional"`
+type aspectCallFrame struct {
+	Type         types.JoinPointRunType `json:"-"`
+	Aspect       common.Address         `json:"aspect"`
+	From         common.Address         `json:"from"`
+	Gas          uint64                 `json:"gas"`
+	GasUsed      uint64                 `json:"gasUsed"`
+	To           common.Address         `json:"to"`
+	Input        []byte                 `json:"input" rlp:"optional"`
+	Output       []byte                 `json:"output,omitempty" rlp:"optional"`
+	Error        string                 `json:"error,omitempty" rlp:"optional"`
+	RevertReason string                 `json:"revertReason,omitempty"`
+	ExecContext  json.RawMessage        `json:"execContext,omitempty"`
+	Calls        []callFrame            `json:"calls,omitempty" rlp:"optional"`
 	// Placed at end on purpose. The RLP will be decoded to 0 instead of
 	// nil if there are non-empty elements after in the struct.
 	Value *big.Int `json:"value,omitempty" rlp:"optional"`
+}
+
+func (f aspectCallFrame) TypeString() string {
+	return f.Type.String()
+}
+
+func (f aspectCallFrame) failed() bool {
+	return len(f.Error) > 0
+}
+
+func (f *aspectCallFrame) processOutput(output []byte, err error) {
+	output = common.CopyBytes(output)
+	if err == nil {
+		f.Output = output
+		return
+	}
+	f.Error = err.Error()
+	if len(output) == 0 {
+		return
+	}
+	f.Output = output
+	if len(output) < 4 {
+		return
+	}
+	if unpacked, err := abi.UnpackRevert(output); err == nil {
+		f.RevertReason = unpacked
+	}
+}
+
+type callFrame struct {
+	Type         vm.OpCode         `json:"-"`
+	From         common.Address    `json:"from"`
+	Gas          uint64            `json:"gas"`
+	GasUsed      uint64            `json:"gasUsed"`
+	To           *common.Address   `json:"to,omitempty" rlp:"optional"`
+	Input        []byte            `json:"input" rlp:"optional"`
+	Output       []byte            `json:"output,omitempty" rlp:"optional"`
+	Error        string            `json:"error,omitempty" rlp:"optional"`
+	RevertReason string            `json:"revertReason,omitempty"`
+	Calls        []callFrame       `json:"calls,omitempty" rlp:"optional"`
+	Logs         []callLog         `json:"logs,omitempty" rlp:"optional"`
+	JoinPoints   []aspectCallFrame `json:"joinPoints,omitempty" rlp:"optional"`
+	// Placed at end on purpose. The RLP will be decoded to 0 instead of
+	// nil if there are non-empty elements after in the struct.
+	Value *big.Int `json:"value,omitempty" rlp:"optional"`
+
+	joinPoint types.JoinPointRunType // current executing call level join point
 }
 
 func (f callFrame) TypeString() string {
@@ -97,6 +147,15 @@ type callFrameMarshaling struct {
 	Output     hexutil.Bytes
 }
 
+type aspectCallFrameMarshaling struct {
+	TypeString string `json:"type"`
+	Gas        hexutil.Uint64
+	GasUsed    hexutil.Uint64
+	Value      *hexutil.Big
+	Input      hexutil.Bytes
+	Output     hexutil.Bytes
+}
+
 type callTracer struct {
 	noopTracer
 	callstack []callFrame
@@ -123,6 +182,52 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, e
 	// First callframe contains tx context info
 	// and is populated on start and end.
 	return &callTracer{callstack: make([]callFrame, 1), config: config}, nil
+}
+
+func (t *callTracer) CaptureAspectEnter(joinpoint types.JoinPointRunType, from, to, aspectId common.Address, input []byte, gas uint64, value *big.Int, execCtx proto.Message) {
+	rawExecCtx, err := json.Marshal(execCtx)
+	if err != nil {
+		t.Stop(err)
+		return
+	}
+
+	// compatible with flat call tracer behavior
+	if value == nil {
+		value = big.NewInt(0)
+	}
+
+	aspectCall := aspectCallFrame{
+		Type:        joinpoint,
+		Aspect:      aspectId,
+		From:        from,
+		Gas:         gas,
+		To:          to,
+		Input:       input,
+		Value:       value,
+		ExecContext: rawExecCtx,
+	}
+
+	// save current join point to tracer if we are in pre/post tx execute
+	last := len(t.callstack) - 1
+	if t.callstack[last].JoinPoints == nil {
+		t.callstack[last].JoinPoints = make([]aspectCallFrame, 0, 1)
+	}
+
+	t.callstack[last].JoinPoints = append(t.callstack[last].JoinPoints, aspectCall)
+	t.callstack[last].joinPoint = joinpoint
+}
+
+func (t *callTracer) CaptureAspectExit(joinpoint types.JoinPointRunType, result *types.AspectExecutionResult) {
+	// reset join point if we exit
+	last := len(t.callstack) - 1
+	t.callstack[last].joinPoint = types.JoinPointRunType_Unknown
+	for i := range t.callstack[last].JoinPoints {
+		if t.callstack[last].JoinPoints[i].Type == joinpoint {
+			t.callstack[last].JoinPoints[i].GasUsed = t.callstack[last].JoinPoints[i].Gas - result.Gas
+			t.callstack[last].JoinPoints[i].processOutput(result.Ret, result.Err)
+			break
+		}
+	}
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
@@ -210,6 +315,7 @@ func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 		Gas:   gas,
 		Value: value,
 	}
+
 	t.callstack = append(t.callstack, call)
 }
 
@@ -230,7 +336,16 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 
 	call.GasUsed = gasUsed
 	call.processOutput(output, err)
-	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
+
+	if t.callstack[size-1].joinPoint != types.JoinPointRunType_Unknown {
+		// if currently the call is initiated by aspect, we need to append it
+		// to the calls in aspect frame not current callstack
+		last := len(t.callstack[size-1].JoinPoints)
+		t.callstack[size-1].JoinPoints[last].Calls = append(t.callstack[size-1].JoinPoints[last].Calls, call)
+	} else {
+		// append to callstack otherwise
+		t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
+	}
 }
 
 func (t *callTracer) CaptureTxStart(gasLimit uint64) {
@@ -256,7 +371,7 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.RawMessage(res), t.reason
+	return res, t.reason
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
@@ -275,5 +390,13 @@ func clearFailedLogs(cf *callFrame, parentFailed bool) {
 	}
 	for i := range cf.Calls {
 		clearFailedLogs(&cf.Calls[i], failed)
+	}
+	// clear join points call frame
+	for i := range cf.JoinPoints {
+		if len(cf.JoinPoints) > 0 {
+			for j := range cf.JoinPoints[i].Calls {
+				clearFailedLogs(&cf.JoinPoints[i].Calls[j], failed)
+			}
+		}
 	}
 }

@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/artela-network/aspect-core/types"
+	"google.golang.org/protobuf/proto"
 	"math/big"
 	"strings"
 
@@ -63,6 +65,7 @@ type flatCallFrame struct {
 	Error               string          `json:"error,omitempty"`
 	Result              *flatCallResult `json:"result,omitempty"`
 	Subtraces           int             `json:"subtraces"`
+	JoinPoints          int             `json:"joinPoints"`
 	TraceAddress        []int           `json:"traceAddress"`
 	TransactionHash     *common.Hash    `json:"transactionHash"`
 	TransactionPosition uint64          `json:"transactionPosition"`
@@ -77,12 +80,14 @@ type flatCallAction struct {
 	CallType       string          `json:"callType,omitempty"`
 	CreationMethod string          `json:"creationMethod,omitempty"`
 	From           *common.Address `json:"from,omitempty"`
+	Aspect         *common.Address `json:"aspect,omitempty"`
 	Gas            *uint64         `json:"gas,omitempty"`
 	Init           *[]byte         `json:"init,omitempty"`
 	Input          *[]byte         `json:"input,omitempty"`
 	RefundAddress  *common.Address `json:"refundAddress,omitempty"`
 	To             *common.Address `json:"to,omitempty"`
 	Value          *big.Int        `json:"value,omitempty"`
+	ExecContext    json.RawMessage `json:"execContext,omitempty"`
 }
 
 type flatCallActionMarshaling struct {
@@ -142,6 +147,14 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 	}
 
 	return &flatCallTracer{tracer: t, ctx: ctx, config: config}, nil
+}
+
+func (t *flatCallTracer) CaptureAspectEnter(joinpoint types.JoinPointRunType, from, to, aspectId common.Address, input []byte, gas uint64, value *big.Int, execCtx proto.Message) {
+	t.tracer.CaptureAspectEnter(joinpoint, from, to, aspectId, input, gas, value, execCtx)
+}
+
+func (t *flatCallTracer) CaptureAspectExit(joinpoint types.JoinPointRunType, result *types.AspectExecutionResult) {
+	t.tracer.CaptureAspectExit(joinpoint, result)
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
@@ -259,6 +272,54 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 	frame.TraceAddress = traceAddress
 	frame.Error = input.Error
 	frame.Subtraces = len(input.Calls)
+	frame.JoinPoints = len(input.JoinPoints)
+	fillCallFrameFromContext(frame, ctx)
+	if convertErrs {
+		convertErrorToParity(frame)
+	}
+
+	// Revert output contains useful information (revert reason).
+	// Otherwise discard result.
+	if input.Error != "" && input.Error != vm.ErrExecutionReverted.Error() {
+		frame.Result = nil
+	}
+
+	output = append(output, *frame)
+
+	// parse sub calls
+	if len(input.Calls) > 0 {
+		for i, childCall := range input.Calls {
+			childAddr := childTraceAddress(traceAddress, i)
+			childCallCopy := childCall
+			flat, err := flatFromNested(&childCallCopy, childAddr, convertErrs, ctx)
+			if err != nil {
+				return nil, err
+			}
+			output = append(output, flat...)
+		}
+	}
+
+	// parse aspect frames
+	if len(input.JoinPoints) > 0 {
+		for i, joinPoint := range input.JoinPoints {
+			childAddr := childTraceAddress(traceAddress, i)
+			joinPointCopy := joinPoint
+			flat, err := flatAspectNested(&joinPointCopy, childAddr, convertErrs, ctx)
+			if err != nil {
+				return nil, err
+			}
+			output = append(output, flat...)
+		}
+	}
+
+	return output, nil
+}
+
+func flatAspectNested(input *aspectCallFrame, traceAddress []int, convertErrs bool, ctx *tracers.Context) (output []flatCallFrame, err error) {
+	frame := newFlatJoinPoint(input)
+	frame.TraceAddress = traceAddress
+	frame.Error = input.Error
+	frame.Subtraces = len(input.Calls)
 	fillCallFrameFromContext(frame, ctx)
 	if convertErrs {
 		convertErrorToParity(frame)
@@ -304,6 +365,31 @@ func newFlatCreate(input *callFrame) *flatCallFrame {
 			GasUsed: &input.GasUsed,
 			Address: input.To,
 			Code:    &resultCode,
+		},
+	}
+}
+
+func newFlatJoinPoint(input *aspectCallFrame) *flatCallFrame {
+	var (
+		actionInput  = input.Input[:]
+		resultOutput = input.Output[:]
+	)
+
+	return &flatCallFrame{
+		Type: strings.ToLower(vm.CALL.String()),
+		Action: flatCallAction{
+			From:        &input.From,
+			To:          &input.To,
+			Aspect:      &input.Aspect,
+			Gas:         &input.Gas,
+			Value:       input.Value,
+			CallType:    strings.ToLower(input.Type.String()),
+			Input:       &actionInput,
+			ExecContext: input.ExecContext,
+		},
+		Result: &flatCallResult{
+			GasUsed: &input.GasUsed,
+			Output:  &resultOutput,
 		},
 	}
 }

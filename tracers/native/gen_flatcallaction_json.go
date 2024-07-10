@@ -22,12 +22,14 @@ func (f flatCallAction) MarshalJSON() ([]byte, error) {
 		CallType       string          `json:"callType,omitempty"`
 		CreationMethod string          `json:"creationMethod,omitempty"`
 		From           *common.Address `json:"from,omitempty"`
+		Aspect         *common.Address `json:"aspect,omitempty"`
 		Gas            *hexutil.Uint64 `json:"gas,omitempty"`
 		Init           *hexutil.Bytes  `json:"init,omitempty"`
 		Input          *hexutil.Bytes  `json:"input,omitempty"`
 		RefundAddress  *common.Address `json:"refundAddress,omitempty"`
 		To             *common.Address `json:"to,omitempty"`
 		Value          *hexutil.Big    `json:"value,omitempty"`
+		ExecContext    json.RawMessage `json:"execContext,omitempty"`
 	}
 	var enc flatCallAction
 	enc.Author = f.Author
@@ -37,12 +39,14 @@ func (f flatCallAction) MarshalJSON() ([]byte, error) {
 	enc.CallType = f.CallType
 	enc.CreationMethod = f.CreationMethod
 	enc.From = f.From
+	enc.Aspect = f.Aspect
 	enc.Gas = (*hexutil.Uint64)(f.Gas)
 	enc.Init = (*hexutil.Bytes)(f.Init)
 	enc.Input = (*hexutil.Bytes)(f.Input)
 	enc.RefundAddress = f.RefundAddress
 	enc.To = f.To
 	enc.Value = (*hexutil.Big)(f.Value)
+	enc.ExecContext = f.ExecContext
 	return json.Marshal(&enc)
 }
 
@@ -56,6 +60,8 @@ func (f *flatCallAction) UnmarshalJSON(input []byte) error {
 		CallType       *string         `json:"callType,omitempty"`
 		CreationMethod *string         `json:"creationMethod,omitempty"`
 		From           *common.Address `json:"from,omitempty"`
+		Aspect         *common.Address `json:"aspect,omitempty"`
+		ExecContext    json.RawMessage `json:"execContext,omitempty"`
 		Gas            *hexutil.Uint64 `json:"gas,omitempty"`
 		Init           *hexutil.Bytes  `json:"init,omitempty"`
 		Input          *hexutil.Bytes  `json:"input,omitempty"`
@@ -105,6 +111,12 @@ func (f *flatCallAction) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Value != nil {
 		f.Value = (*big.Int)(dec.Value)
+	}
+	if dec.Aspect != nil {
+		f.Aspect = dec.Aspect
+	}
+	if dec.ExecContext != nil {
+		f.ExecContext = dec.ExecContext
 	}
 	return nil
 }
