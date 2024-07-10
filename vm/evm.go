@@ -247,28 +247,12 @@ func (evm *EVM) Call(ctx context.Context, caller ethvm.ContractRef, addr common.
 	blockNum := evm.Context.BlockNumber.Uint64()
 	currentCall := tracer.CallTree().Current()
 
-	if evm.IsExecuteJP {
-		preCallResult := djpm.AspectInstance().PreContractCall(ctx, &addr, int64(blockNum), gas, &types.PreContractCallInput{
-			Call: &types.PreExecMessageInput{
-				From:  caller.Address().Bytes(),
-				To:    addr.Bytes(),
-				Index: &currentCall.Index,
-				Data:  input,
-				Value: value.Bytes(),
-				Gas:   &gas,
-			},
-			Block: &types.BlockInput{Number: &blockNum},
-		})
-		if preCallResult.Err != nil {
-			if preCallResult.Err.Error() == ErrOutOfGas.Error() {
-				preCallResult.Err = ErrOutOfGas
-			}
-
-			return preCallResult.Ret, preCallResult.Gas, preCallResult.Err
-		}
-
-		gas = preCallResult.Gas
+	var aspectLogger types.AspectLogger
+	if evm.Config.Tracer != nil {
+		// make sure the tracer type is correct
+		aspectLogger, _ = evm.Config.Tracer.(types.AspectLogger)
 	}
+
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -335,6 +319,29 @@ func (evm *EVM) Call(ctx context.Context, caller ethvm.ContractRef, addr common.
 		if len(code) == 0 {
 			ret, err = nil, nil // gas is unchanged
 		} else {
+			if evm.IsExecuteJP {
+				preCallResult := djpm.AspectInstance().PreContractCall(ctx, caller.Address(), addr, input, int64(blockNum), gas, value, &types.PreContractCallInput{
+					Call: &types.PreExecMessageInput{
+						From:  caller.Address().Bytes(),
+						To:    addr.Bytes(),
+						Index: &currentCall.Index,
+						Data:  input,
+						Value: value.Bytes(),
+						Gas:   &gas,
+					},
+					Block: &types.BlockInput{Number: &blockNum},
+				}, aspectLogger)
+				if preCallResult.Err != nil {
+					if preCallResult.Err.Error() == ErrOutOfGas.Error() {
+						preCallResult.Err = ErrOutOfGas
+					}
+
+					return preCallResult.Ret, preCallResult.Gas, preCallResult.Err
+				}
+
+				gas = preCallResult.Gas
+			}
+
 			addrCopy := addr
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
@@ -348,7 +355,7 @@ func (evm *EVM) Call(ctx context.Context, caller ethvm.ContractRef, addr common.
 				if err != nil {
 					errorMsg = err.Error()
 				}
-				postCallResult := djpm.AspectInstance().PostContractCall(ctx, &addr, int64(blockNum), gas, &types.PostContractCallInput{
+				postCallResult := djpm.AspectInstance().PostContractCall(ctx, caller.Address(), addr, input, int64(blockNum), gas, value, &types.PostContractCallInput{
 					Call: &types.PostExecMessageInput{
 						From:  caller.Address().Bytes(),
 						To:    addr.Bytes(),
@@ -360,7 +367,7 @@ func (evm *EVM) Call(ctx context.Context, caller ethvm.ContractRef, addr common.
 						Error: &errorMsg,
 					},
 					Block: &types.BlockInput{Number: &blockNum},
-				})
+				}, aspectLogger)
 				if postCallResult.Err != nil {
 					if postCallResult.Err.Error() == ErrOutOfGas.Error() {
 						err = ErrOutOfGas
