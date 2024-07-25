@@ -57,6 +57,7 @@ var (
 	londonInstructionSet           = newLondonInstructionSet()
 	mergeInstructionSet            = newMergeInstructionSet()
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
+	cancunInstructionSet           = newCancunInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -78,6 +79,19 @@ func validate(jt JumpTable) JumpTable {
 		}
 	}
 	return jt
+}
+
+func newCancunInstructionSet() JumpTable {
+	instructionSet := newShanghaiInstructionSet()
+	// FIXME: enable the following later, since:
+	//        1. blob tx is not supported yet
+	//        2. selfdestruct requires a lot of modifications, requiring a huge refactor on the state db and state object
+	//enable4844(&instructionSet) // EIP-4844 (BLOBHASH opcode)
+	//enable7516(&instructionSet) // EIP-7516 (BLOBBASEFEE opcode)
+	//enable6780(&instructionSet) // EIP-6780 SELFDESTRUCT only in same transaction
+	enable1153(&instructionSet) // EIP-1153 "Transient Storage"
+	enable5656(&instructionSet) // EIP-5656 (MCOPY opcode)
+	return validate(instructionSet)
 }
 
 func newShanghaiInstructionSet() JumpTable {

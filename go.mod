@@ -3,18 +3,19 @@ module github.com/artela-network/artela-evm
 go 1.20
 
 require (
-	github.com/artela-network/aspect-core v0.4.7-rc7
+	github.com/artela-network/aspect-core v0.4.8-rc8
 	github.com/ethereum/go-ethereum v1.12.0
 	github.com/holiman/uint256 v1.2.2
 	github.com/stretchr/testify v1.8.2
 	golang.org/x/crypto v0.9.0
+	google.golang.org/protobuf v1.30.0
 )
 
 require (
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
 	github.com/VictoriaMetrics/fastcache v1.6.0 // indirect
-	github.com/artela-network/aspect-runtime v0.4.7-rc7 // indirect
+	github.com/artela-network/aspect-runtime v0.4.8-rc8 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
 	github.com/bytecodealliance/wasmtime-go/v20 v20.0.0 // indirect
@@ -67,7 +68,8 @@ require (
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
-	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/bytecodealliance/wasmtime-go/v20 => github.com/artela-network/wasmtime-go/v20 v20.0.3
