@@ -176,6 +176,22 @@ func RunPrecompiledContract(ctx context.Context, p PrecompiledContract, input []
 	return output, suppliedGas, err
 }
 
+func (ctx *ExecutionContext) Caller() common.Address {
+	return ctx.from
+}
+
+func (ctx *ExecutionContext) CallValue() *big.Int {
+	return ctx.value
+}
+
+func (ctx *ExecutionContext) CallGas() uint64 {
+	return ctx.gas
+}
+
+func (ctx *ExecutionContext) CallTo() common.Address {
+	return ctx.to
+}
+
 // ECRECOVER implemented as a native contract.
 type ecrecover struct{}
 
