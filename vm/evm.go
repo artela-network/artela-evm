@@ -47,6 +47,10 @@ type (
 )
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
+	if p, ok := evm.precompiles[addr]; ok {
+		return p, ok
+	}
+
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
 	case evm.chainRules.IsBerlin:
@@ -176,6 +180,15 @@ type EVM struct {
 	tracer *Tracer
 
 	IsExecuteJP bool
+
+	precompiles map[common.Address]PrecompiledContract
+}
+
+// NewEVMWithPrecompiles returns a new EVM with external precompiled address
+func NewEVMWithPrecompiles(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config, precompiles map[common.Address]PrecompiledContract) *EVM {
+	evm := NewEVM(blockCtx, txCtx, statedb, chainConfig, config)
+	evm.precompiles = precompiles
+	return evm
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
